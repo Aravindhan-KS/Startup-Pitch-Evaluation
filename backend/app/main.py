@@ -5,13 +5,14 @@ import os
 import uuid
 from typing import Annotated
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.core.config import settings
 from app.services.inference import InferenceService
+from app.services.cloud_uploader import upload_pitch_result
 from app.schemas import (
     BatchEvaluationRequest,
     BatchEvaluationResponse,
@@ -93,8 +94,94 @@ def _detect_duration_sec(video_path: Path, default_duration: int = 60) -> int:
 
 
 @app.post("/evaluate")
-def evaluate_pitch(payload: PitchInput) -> EvaluationResponse:
-    return inference_service.evaluate_payload(payload)
+async def evaluate_pitch(request: Request):
+    """Accept either JSON `PitchInput` or multipart/form-data with a video file.
+
+    If the request is multipart, save the uploaded video and construct a
+    `PitchInput` to pass into the shared inference service so both routes
+    follow the same pipeline and transcription behavior.
+    """
+    content_type = (request.headers.get("content-type") or "").lower()
+    if content_type.startswith("multipart/"):
+        form = await request.form()
+        video = form.get("video")
+        if not video or not getattr(video, "filename", None):
+            raise HTTPException(status_code=400, detail="Bad Request: video file is required")
+
+        title = form.get("title", "")
+        transcript = form.get("transcript", "")
+        language_hint = form.get("language_hint", "en")
+        slide_text = form.get("slide_text", "")
+        founder_name = form.get("founder_name", "")
+        startup_name = form.get("startup_name", "")
+        sector = form.get("sector", "")
+        stage = form.get("stage", "")
+
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        safe_name = _safe_video_name(video.filename or "pitch.mp4")
+        saved_path = upload_dir / safe_name
+
+        with saved_path.open("wb") as buffer:
+            shutil.copyfileobj(video.file, buffer)
+
+        resolved_title = title.strip() or Path(video.filename or safe_name).stem
+        slide_points = [line.strip() for line in slide_text.splitlines() if line.strip()]
+        duration_sec = _detect_duration_sec(saved_path)
+
+        payload = PitchInput(
+            title=resolved_title,
+            transcript=transcript.strip(),
+            language_hint=language_hint.strip() or "en",
+            presenter_profile={
+                "founder_name": founder_name.strip(),
+                "startup_name": startup_name.strip(),
+                "sector": sector.strip(),
+                "stage": stage.strip(),
+            },
+            slide_text=slide_points,
+            video=PitchVideoInput(
+                file_name=str(saved_path),
+                file_format=safe_name.split(".")[-1] if "." in safe_name else "mp4",
+                duration_sec=duration_sec,
+                transcript_text=transcript.strip(),
+            ),
+            slides=[],
+            user_details={
+                "founder_name": founder_name.strip(),
+                "startup_name": startup_name.strip(),
+                "sector": sector.strip(),
+                "stage": stage.strip(),
+            },
+        )
+
+        result = inference_service.evaluate_payload(payload)
+        
+        # Upload result to cloud database
+        try:
+            result_dict = result.model_dump() if hasattr(result, "model_dump") else result
+            upload_pitch_result(result_dict)
+        except Exception as e:
+            logger.warning(f"Cloud upload failed for request {result_dict.get('request_id', 'unknown')}: {e}")
+        
+        return result
+
+    # Otherwise expect JSON body
+    try:
+        body = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid JSON body: {exc}") from exc
+
+    payload = PitchInput(**body)
+    result = inference_service.evaluate_payload(payload)
+    
+    # Upload result to cloud database
+    try:
+        result_dict = result.model_dump() if hasattr(result, "model_dump") else result
+        upload_pitch_result(result_dict)
+    except Exception as e:
+        logger.warning(f"Cloud upload failed for request {result_dict.get('request_id', 'unknown')}: {e}")
+    
+    return result
 
 
 @app.post(
@@ -153,7 +240,16 @@ async def evaluate_pitch_upload(
         },
     )
 
-    return inference_service.evaluate_payload(payload)
+    result = inference_service.evaluate_payload(payload)
+    
+    # Upload result to cloud database
+    try:
+        result_dict = result.model_dump() if hasattr(result, "model_dump") else result
+        upload_pitch_result(result_dict)
+    except Exception as e:
+        logger.warning(f"Cloud upload failed for request {result_dict.get('request_id', 'unknown')}: {e}")
+    
+    return result
 
 
 @app.post(
@@ -162,7 +258,17 @@ async def evaluate_pitch_upload(
 )
 def evaluate_pitch_batch(payload: BatchEvaluationRequest) -> BatchEvaluationResponse:
     try:
-        return inference_service.evaluate_batch(payload.pitches)
+        result = inference_service.evaluate_batch(payload.pitches)
+        
+        # Upload each batch result to cloud database
+        try:
+            for evaluation in result.evaluations:
+                eval_dict = evaluation.model_dump() if hasattr(evaluation, "model_dump") else evaluation
+                upload_pitch_result(eval_dict)
+        except Exception as e:
+            logger.warning(f"Cloud batch upload failed: {e}")
+        
+        return result
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

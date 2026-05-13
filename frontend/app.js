@@ -198,7 +198,7 @@ function updateModeBadge(mode) {
   }
 }
 
-function toPayload() {
+function toPayload(includeVideo = true) {
   const slidePoints = listFromTextarea(fields.slideText.value);
   const videoFile = getSelectedVideoFile();
   const titleValue = fields.title.value.trim();
@@ -221,7 +221,7 @@ function toPayload() {
       title: `Slide ${index + 1}`,
       content: point,
     })),
-    video: videoFile
+    video: includeVideo && videoFile
       ? {
           file_name: videoFile.name,
           file_format: (videoFile.name.split(".").pop() || "mp4").toLowerCase(),
@@ -304,30 +304,26 @@ async function evaluatePitch(payload) {
     return;
   }
   setLoading(true);
-
   try {
+    const videoFile = getSelectedVideoFile();
+
+    if (!videoFile) {
+      evaluationPlaceholder.classList.remove("hidden");
+      evaluationPlaceholder.textContent = "Please upload a video file before evaluating.";
+      evaluationResults.classList.add("hidden");
+      statusText.textContent = "Video file required";
+      return;
+    }
+
     const formData = buildUploadFormData(payload);
-    const uploadResponse = await fetch(`${baseUrl}/evaluate/upload`, {
+    const response = await fetch(`${baseUrl}/evaluate/upload`, {
       method: "POST",
       body: formData,
     });
 
-    let response = uploadResponse;
-    if ((uploadResponse.status === 404 || uploadResponse.status === 405) && getSelectedVideoFile()) {
-      response = await fetch(`${baseUrl}/evaluate`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
-    }
-
     if (!response.ok) {
       const maybeError = await response.text();
-      throw new Error(
-        `Request failed (${response.status}): ${maybeError.slice(0, 220)}`,
-      );
+      throw new Error(`Request failed (${response.status}): ${maybeError.slice(0, 220)}`);
     }
 
     const result = await response.json();

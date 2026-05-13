@@ -1,95 +1,332 @@
 #!/usr/bin/env python3
-import os
-import re
-from pathlib import Path
+"""Streamlit Cloud Dashboard for Edge AI Pitch Evaluation System.
+
+This dashboard reads evaluated pitch results from Firebase and displays them
+in real-time. It does NOT call the local backend directly, making it suitable
+for Streamlit Cloud deployment while the backend runs on a local edge device.
+
+The edge device processes videos locally and uploads results to Firebase,
+which this dashboard then visualizes.
+"""
+
 import streamlit as st
-from streamlit.components.v1 import html as components_html
+import pandas as pd
+import firebase_admin
+from firebase_admin import credentials, firestore
+import time
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
-def inline_frontend():
-    # Prefer the frontend folder by default; fall back to backend static.
-    repo_root = Path(__file__).parent
-    candidates = [repo_root / "frontend", repo_root / "backend" / "app" / "static"]
-    base = next((p for p in candidates if p.exists()), candidates[0])
-    index = base / "index.html"
-    if not index.exists():
-        st.error(f"index.html not found in {base}")
-        return ""
-    html = index.read_text(encoding="utf-8")
+def init_firebase():
+    """Initialize Firebase connection from Streamlit secrets."""
+    try:
+        if not firebase_admin._apps:
+            firebase_config = dict(st.secrets.get("firebase", {}))
+            if not firebase_config:
+                logger.error("Firebase configuration not found in secrets")
+                return None
+            cred = credentials.Certificate(firebase_config)
+            firebase_admin.initialize_app(cred)
+            logger.info("Firebase initialized from Streamlit secrets")
+        return firestore.client()
+    except Exception:
+        logger.exception("Firebase initialization failed")
+        st.error("Firebase Error: initialization failed")
+        return None
 
-    def read_file(rel_path: str) -> str:
-        # Normalize paths: strip query string and leading slash/static prefix
-        rel = rel_path.split("?")[0]
-        rel = rel.lstrip("/")
-        if rel.startswith("static/"):
-            rel = rel[len("static/"):]
-        p = base / rel
-        return p.read_text(encoding="utf-8") if p.exists() else ""
 
-    # Inline CSS files referenced with <link rel="stylesheet" href="...">
-    html = re.sub(
-        r'<link\s+rel=["\']stylesheet["\']\s+href=["\'](?P<h>[^"\']+)["\']\s*/?>',
-        lambda m: f"<style>{read_file(m.group('h'))}</style>",
-        html,
-    )
+def load_results(db, limit: int = 50) -> pd.DataFrame:
+    """Load recent pitch evaluations from Firebase.
+    
+    Args:
+        db: Firestore database client
+        limit: Maximum number of results to retrieve
+    
+    Returns:
+        DataFrame with evaluation results
+    """
+    try:
+        docs = (
+            db.collection("pitch_evaluations")
+            .order_by("timestamp", direction=firestore.Query.DESCENDING)
+            .limit(limit)
+            .stream()
+        )
 
-    # Inline JS files referenced with <script src="..."></script>
-    html = re.sub(
-        r'<script\s+src=["\'](?P<s>[^"\']+)["\']\s*>\s*</script>',
-        lambda m: f"<script>{read_file(m.group('s'))}</script>",
-        html,
-    )
+        rows = []
+        for doc in docs:
+            data = doc.to_dict()
+            result = data.get("result", {})
+            summary = result.get("summary", {})
+            dashboard = result.get("dashboard", {})
 
-    return html
+            rows.append({
+                "timestamp": data.get("timestamp", "N/A"),
+                "overall_score": summary.get("overall_score", 0),
+                "confidence_score": summary.get("confidence_score", 0),
+                "investment_band": summary.get("investment_band", "Unknown"),
+                "language_detected": summary.get("language_detected", "N/A"),
+                "scoring_mode": summary.get("scoring_mode", "N/A"),
+                "strengths": ", ".join(summary.get("strengths", [])) or "None",
+                "weaknesses": ", ".join(summary.get("weaknesses", [])) or "None",
+                "suggestions": ", ".join(summary.get("suggestions", [])) or "None",
+                "quantitative_scores": dashboard.get("quantitative_scores", []),
+                "modality_weights": dashboard.get("modality_weights", []),
+                "risk_distribution": dashboard.get("risk_distribution", []),
+                "request_id": result.get("request_id", "N/A"),
+            })
+
+        return pd.DataFrame(rows)
+
+    except Exception:
+        logger.exception("Failed to load results")
+        return pd.DataFrame()
+
+
+def create_score_chart(scores_list: list) -> dict:
+    """Convert Pydantic score list to chart format.
+    
+    Args:
+        scores_list: List of DashboardSeriesPoint objects
+    
+    Returns:
+        Dictionary for st.bar_chart
+    """
+    if isinstance(scores_list, list) and len(scores_list) > 0:
+        if isinstance(scores_list[0], dict):
+            return {item.get("label", "N/A"): item.get("value", 0) for item in scores_list}
+        else:
+            return {item.label: item.value for item in scores_list}
+    return {}
+
+
+def format_investment_band(band: str) -> tuple:
+    """Format investment band with color and emoji.
+    
+    Args:
+        band: Investment band string (e.g., "high-potential")
+    
+    Returns:
+        Tuple of (label, color)
+    """
+    band_map = {
+        "high-potential": ("🟢 High Potential", "#2ECC71"),
+        "medium-potential": ("🟡 Medium Potential", "#F39C12"),
+        "low-potential": ("🔴 Low Potential", "#E74C3C"),
+        "not-suitable": ("⚠️ Not Suitable", "#C0392B"),
+    }
+    return band_map.get(band.lower() if isinstance(band, str) else "", ("❓ Unknown", "#95A5A6"))
 
 
 def main():
-    st.set_page_config(page_title="Startup Pitch Evaluation", layout="wide")
-    st.sidebar.title("Startup Pitch Evaluation")
-    st.sidebar.markdown("This Streamlit wrapper serves the existing frontend or backend static site.")
-    st.sidebar.caption("Default: serving `frontend/` if present.")
-    html_content = inline_frontend()
+    """Main Streamlit dashboard application."""
+    
+    st.set_page_config(
+        page_title="Startup Pitch Edge Dashboard",
+        layout="wide",
+        initial_sidebar_state="expanded"
+    )
 
-    # Allow configuring the backend API root via env var or Streamlit secrets.
-    api_url = os.getenv("STREAMLIT_API_URL", "") or st.secrets.get("api_url", "")
+    # Header
+    st.markdown("# 🎯 Startup Pitch Edge AI Dashboard")
+    st.markdown(
+        """
+        **Real-time pitch evaluation results from local edge device**
+        
+        Local backend processes videos → uploads results → cloud dashboard displays them
+        """
+    )
 
-    # If an API URL is provided, inject a small JS shim that prefixes relative
-    # fetch calls (like "/evaluate") with the configured API root. This lets
-    # the frontend continue using relative paths while Streamlit proxies them
-    # to the real backend.
-    if html_content:
-        if api_url:
-            shim_template = """
-<script>
-(function(){
-    const API_URL = "__API_URL__";
-    if(API_URL){
-        const orig = window.fetch.bind(window);
-        window.fetch = function(input, init){
-            try {
-                if(typeof input === 'string' && input.startsWith('/')) {
-                    input = API_URL.replace(/\/$/, '') + input;
-                } else if (input instanceof Request) {
-                    const url = new URL(input.url);
-                    if(url.origin === window.location.origin && url.pathname.startsWith('/')) {
-                        input = new Request(API_URL.replace(/\/$/, '') + url.pathname + url.search, input);
-                    }
-                }
-            } catch(e){}
-            return orig(input, init);
-        };
-    }
-})();
-</script>
-"""
-            shim = shim_template.replace("__API_URL__", api_url)
-            # insert shim before closing </head> if present, otherwise prepend
-            if re.search(r'</head>', html_content, flags=re.IGNORECASE):
-                html_content = re.sub(r'</head>', shim + '\n</head>', html_content, flags=re.IGNORECASE)
-            else:
-                html_content = shim + html_content
+    # Sidebar
+    st.sidebar.title("⚙️ Dashboard Settings")
+    refresh_interval = st.sidebar.slider(
+        "Refresh interval (seconds)",
+        min_value=2,
+        max_value=60,
+        value=5
+    )
+    limit = st.sidebar.slider(
+        "Number of results",
+        min_value=5,
+        max_value=100,
+        value=20
+    )
+    
+    st.sidebar.markdown("---")
+    st.sidebar.info(
+        """
+        **How it works:**
+        1. Local edge device captures videos
+        2. Backend evaluates using multimodal pipeline
+        3. Results uploaded to Firebase
+        4. Dashboard displays in real-time
+        
+        **Status:** Connected to Firebase
+        """
+    )
 
-        components_html(html_content, height=900, scrolling=True)
+    # Initialize Firebase
+    db = init_firebase()
+
+    if db is None:
+        st.error("❌ Firebase connection failed. Check your secrets.toml configuration.")
+        st.stop()
+
+    # Main content area with auto-refresh
+    placeholder = st.empty()
+    last_update = st.empty()
+
+    update_count = 0
+
+    while True:
+        try:
+            with placeholder.container():
+                df = load_results(db, limit=limit)
+
+                if df.empty:
+                    st.warning("⏳ No pitch evaluations received yet. Waiting for edge device...")
+                else:
+                    latest = df.iloc[0]
+
+                    # KPI Row
+                    col1, col2, col3, col4 = st.columns(4)
+
+                    with col1:
+                        st.metric(
+                            "📊 Overall Score",
+                            f"{latest['overall_score']:.1f}/10",
+                            delta=None
+                        )
+
+                    with col2:
+                        # Confidence may be stored either as a 0-1 fraction or a 0-10 score.
+                        conf_val = latest.get('confidence_score', 0) if isinstance(latest, dict) else latest['confidence_score']
+                        try:
+                            conf_num = float(conf_val)
+                        except Exception:
+                            conf_num = 0.0
+
+                        if conf_num > 1:
+                            # Treat as 0-10 scale, display as 'x.xx/10'
+                            st.metric(
+                                "🎯 Confidence",
+                                f"{conf_num:.2f}/10",
+                                delta=None
+                            )
+                        else:
+                            # Treat as fraction 0-1 and display as percent
+                            st.metric(
+                                "🎯 Confidence",
+                                f"{conf_num:.2%}",
+                                delta=None
+                            )
+
+                    with col3:
+                        band_label, _ = format_investment_band(latest["investment_band"])
+                        st.markdown(f"#### {band_label}")
+
+                    with col4:
+                        st.metric(
+                            "🌍 Language",
+                            latest["language_detected"],
+                            delta=None
+                        )
+
+                    # Latest Evaluation Details
+                    st.subheader("📋 Latest Evaluation")
+                    
+                    eval_col1, eval_col2 = st.columns(2)
+                    
+                    with eval_col1:
+                        st.write("**Timestamp:**", latest["timestamp"])
+                        st.write("**Request ID:**", latest["request_id"])
+                        st.write("**Scoring Mode:**", latest["scoring_mode"])
+
+                    with eval_col2:
+                        st.write("**Strengths:**", latest["strengths"])
+                        st.write("**Weaknesses:**", latest["weaknesses"])
+                        st.write("**Suggestions:**", latest["suggestions"])
+
+                    # Quantitative Scores Chart
+                    st.subheader("📈 Quantitative Scores")
+                    scores_dict = create_score_chart(latest["quantitative_scores"])
+                    if scores_dict:
+                        st.bar_chart(pd.DataFrame({
+                            "Metric": list(scores_dict.keys()),
+                            "Score": list(scores_dict.values())
+                        }).set_index("Metric"))
+                    else:
+                        st.info("No quantitative scores available")
+
+                    # Modality Weights Chart
+                    st.subheader("🎙️ Modality Contribution")
+                    modality_dict = create_score_chart(latest["modality_weights"])
+                    if modality_dict:
+                        st.bar_chart(pd.DataFrame({
+                            "Modality": list(modality_dict.keys()),
+                            "Weight": list(modality_dict.values())
+                        }).set_index("Modality"))
+                    else:
+                        st.info("No modality weights available")
+
+                    # Risk Distribution
+                    st.subheader("⚠️ Risk Distribution")
+                    risk_dict = create_score_chart(latest["risk_distribution"])
+                    if risk_dict:
+                        st.bar_chart(pd.DataFrame({
+                            "Risk Factor": list(risk_dict.keys()),
+                            "Score": list(risk_dict.values())
+                        }).set_index("Risk Factor"))
+                    else:
+                        st.info("No risk factors identified")
+
+                    # Recent Evaluations Table
+                    st.subheader("📊 Recent Evaluations")
+                    
+                    display_cols = ["timestamp", "overall_score", "confidence_score", 
+                                   "investment_band", "language_detected"]
+                    table_df = df[display_cols].copy()
+                    table_df.columns = ["Timestamp", "Score", "Confidence", 
+                                       "Band", "Language"]
+                    
+                    st.dataframe(
+                        table_df,
+                        use_container_width=True,
+                        hide_index=True
+                    )
+
+                    # Score Trend Chart
+                    st.subheader("📉 Score Trend")
+                    trend_data = df[["timestamp", "overall_score"]].dropna().sort_values("timestamp")
+                    if len(trend_data) > 1:
+                        st.line_chart(
+                            trend_data.set_index("timestamp"),
+                            y="overall_score"
+                        )
+                    else:
+                        st.info("Need at least 2 evaluations to show trend")
+
+            # Update timestamp
+            update_count += 1
+            with last_update:
+                st.caption(
+                    f"🔄 Auto-refreshing every {refresh_interval}s | "
+                    f"Updates: {update_count} | Last update: {pd.Timestamp.now().strftime('%H:%M:%S')}"
+                )
+
+            time.sleep(refresh_interval)
+            st.rerun()
+
+        except KeyboardInterrupt:
+            logger.info("Dashboard stopped by user")
+            break
+        except Exception:
+            logger.exception("Dashboard error")
+            st.error("Dashboard error")
+            time.sleep(5)
 
 
 if __name__ == "__main__":

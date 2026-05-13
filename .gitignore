@@ -154,6 +154,25 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
+# Firebase and Cloud Secrets
+firebase_key.json
+.streamlit/secrets.toml
+.env.local
+
+# Edge Device and Cache
+backend/outputs/batch_input/*
+!backend/outputs/batch_input/.gitkeep
+backend/outputs/uploads/*
+!backend/outputs/uploads/.gitkeep
+backend/outputs/edge_snapshots/*
+!backend/outputs/edge_snapshots/.gitkeep
+
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
 # pytype static type analyzer
 .pytype/
 
