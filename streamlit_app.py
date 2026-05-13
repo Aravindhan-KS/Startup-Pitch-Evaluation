@@ -131,16 +131,6 @@ def main():
         initial_sidebar_state="expanded"
     )
 
-    # Header
-    st.markdown("# 🎯 Startup Pitch Edge AI Dashboard")
-    st.markdown(
-        """
-        **Real-time pitch evaluation results from local edge device**
-        
-        Local backend processes videos → uploads results → cloud dashboard displays them
-        """
-    )
-
     # Sidebar
     st.sidebar.title("⚙️ Dashboard Settings")
     refresh_interval = st.sidebar.slider(
