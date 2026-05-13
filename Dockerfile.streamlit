@@ -1,0 +1,22 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements-streamlit.txt .
+RUN pip install --no-cache-dir -r requirements-streamlit.txt
+
+COPY streamlit_app.py .
+
+# Streamlit config — disable the browser-open nag, set base URL for nginx proxy
+RUN mkdir -p .streamlit && cat > .streamlit/config.toml <<'EOF'
+[server]
+headless = true
+address = "0.0.0.0"
+port = 8501
+enableCORS = false
+enableXsrfProtection = false
+EOF
+
+EXPOSE 8501
+
+CMD ["streamlit", "run", "streamlit_app.py"]

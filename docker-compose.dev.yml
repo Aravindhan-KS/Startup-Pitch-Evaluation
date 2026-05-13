@@ -1,0 +1,57 @@
+# docker-compose.dev.yml  ── local development, no ECR needed
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - SPE_USE_HEURISTIC_PIPELINE=true
+      - SPE_USE_LOCAL_TRANSCRIBER=true
+      - SPE_FASTER_WHISPER_DEVICE=cpu
+      - SPE_FASTER_WHISPER_COMPUTE_TYPE=int8
+      - FIREBASE_KEY_PATH=/run/secrets/firebase_key
+    secrets:
+      - firebase_key
+    volumes:
+      - ./backend/outputs/uploads:/app/outputs/uploads
+      - ./backend/outputs/batch_input:/app/outputs/batch_input
+    networks:
+      - app_net
+
+  streamlit:
+    build:
+      context: .
+      dockerfile: Dockerfile.streamlit
+    restart: unless-stopped
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./secrets.toml:/app/.streamlit/secrets.toml:ro
+    networks:
+      - app_net
+
+  nginx:
+    build:
+      context: .
+      dockerfile: Dockerfile.nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    networks:
+      - app_net
+    depends_on:
+      - backend
+      - streamlit
+
+networks:
+  app_net:
+    driver: bridge
+
+secrets:
+  firebase_key:
+    file: ./firebase_key.json

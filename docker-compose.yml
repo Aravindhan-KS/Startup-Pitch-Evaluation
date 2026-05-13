@@ -1,0 +1,67 @@
+# docker-compose.yml  ── used on the EC2 instance by deploy.sh
+# ECR_REGISTRY is injected by deploy.sh via an .env file on the host
+version: "3.9"
+
+services:
+  backend:
+    image: "${ECR_REGISTRY}/pitch-eval-backend:latest"
+    restart: unless-stopped
+    environment:
+      - SPE_USE_HEURISTIC_PIPELINE=${SPE_USE_HEURISTIC_PIPELINE:-true}
+      - SPE_USE_LOCAL_TRANSCRIBER=${SPE_USE_LOCAL_TRANSCRIBER:-true}
+      - SPE_ENABLE_VISUAL_EXTRACTION=${SPE_ENABLE_VISUAL_EXTRACTION:-true}
+      - SPE_ENABLE_AUDIO_EXTRACTION=${SPE_ENABLE_AUDIO_EXTRACTION:-true}
+      - SPE_FASTER_WHISPER_DEVICE=cpu
+      - SPE_FASTER_WHISPER_COMPUTE_TYPE=int8
+      - SPE_FASTER_WHISPER_MODEL_SIZE=small
+      - SPE_OPENAI_API_KEY=${SPE_OPENAI_API_KEY:-}
+      - FIREBASE_KEY_PATH=/run/secrets/firebase_key
+      - FIREBASE_STORAGE_BUCKET=${FIREBASE_STORAGE_BUCKET:-}
+    secrets:
+      - firebase_key
+    volumes:
+      - pitch_uploads:/app/outputs/uploads
+      - pitch_batch:/app/outputs/batch_input
+    networks:
+      - app_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  streamlit:
+    image: "${ECR_REGISTRY}/pitch-eval-streamlit:latest"
+    restart: unless-stopped
+    volumes:
+      # Mount your Firebase secrets.toml so st.secrets works
+      - ./secrets.toml:/app/.streamlit/secrets.toml:ro
+    networks:
+      - app_net
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  nginx:
+    image: "${ECR_REGISTRY}/pitch-eval-nginx:latest"
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    networks:
+      - app_net
+    depends_on:
+      - backend
+      - streamlit
+
+volumes:
+  pitch_uploads:
+  pitch_batch:
+
+networks:
+  app_net:
+    driver: bridge
+
+secrets:
+  firebase_key:
+    file: ./firebase_key.json
