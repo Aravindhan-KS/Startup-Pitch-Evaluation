@@ -107,23 +107,23 @@
 
 ---
 
-## Deployed Architecture (On Render.com)
+## Deployed Architecture (In Colab with ngrok)
 
 ```
 ┌─ INTERNET ──────────────────────────────────────────────────────┐
 │                                                                  │
-│  User Browser: https://pitch-eval-backend.onrender.com/         │
+│  User Browser: https://YOUR_NGROK_URL/                          │
 │                                                                  │
 └──────────────────────────────────┬───────────────────────────────┘
                                    │
                     ┌──────────────▼──────────────┐
-                    │  Render.com CDN/Load        │
-                    │  Balancer                   │
+                    │  ngrok Public Tunnel        │
+                    │  HTTPS Forwarder            │
                     └──────────────┬──────────────┘
                                    │
                     ┌──────────────▼──────────────┐
-                    │  RENDER CONTAINER          │
-                    │  (Linux Debian)            │
+                    │  Colab Runtime             │
+                    │  (Linux + GPU session)     │
                     └─────────────────────────────┘
                                    │
               ┌────────────────────┼────────────────────┐
@@ -189,7 +189,7 @@
          (Ephemeral)          (Ephemeral)          (Ephemeral)
 
     Note: All storage is temporary (cleared on redeploy)
-    For persistent storage, use Render Disk or external storage
+   For persistent storage, use Google Drive, a local export, or another hosted disk
 ```
 
 ---
@@ -343,23 +343,23 @@ Memory: System RAM (16GB+ recommended)
 CPU: Unlimited
 ```
 
-### Render Deployment
+### Colab Deployment
 ```
 OS: Linux (Debian)
-Python: 3.9+ (specified by Render runtime)
-GPU: None (free plan has CPU only)
-Storage: 512MB (free plan), /tmp is ephemeral
-Network: Public HTTPS only
-Timeout: 30 seconds (free plan)
-Memory: 512MB (free plan)
-CPU: Shared resources (free plan)
+Python: 3.9+ (Colab runtime)
+GPU: Available when you choose a GPU runtime
+Storage: Temporary notebook session storage
+Network: Public HTTPS through ngrok
+Timeout: Colab session limits apply
+Memory: Depends on the selected Colab runtime
+CPU: Shared, but often paired with GPU support
 ```
 
 ---
 
 ## Performance Characteristics
 
-| Metric | Local (GPU) | Local (CPU) | Render Free |
+| Metric | Local (GPU) | Local (CPU) | Colab + ngrok |
 |--------|------------|-----------|------------|
 | 30-sec video | 1-2 min | 5-10 min | 15-30 min |
 | 60-sec video | 2-4 min | 10-20 min | 30-60 min |
@@ -406,7 +406,7 @@ Your system processes startup pitch videos through a sophisticated ML pipeline:
 ✅ **5-stage pipeline** for comprehensive analysis
 ✅ **3 modalities** (text, visual, audio) for holistic scoring
 ✅ **Works locally** for development
-✅ **Deploys to cloud** with Render.com
+✅ **Exposes the backend publicly** through Colab + ngrok
 ✅ **Heuristic mode** for fast execution without GPU
 ✅ **Neural mode** for high-quality analysis with models
 ✅ **Fallback gracefully** when resources are limited

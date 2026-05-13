@@ -132,6 +132,20 @@ Useful URLs:
 - `http://127.0.0.1:8000/docs`
 - `http://127.0.0.1:8000/health`
 
+## Run with Colab + ngrok
+
+If you want a GPU-backed public URL without hosting a server yourself, use [colab_deployment.ipynb](colab_deployment.ipynb).
+
+Basic flow:
+
+1. Open the notebook in Colab.
+2. Switch the runtime to GPU.
+3. Paste your ngrok auth token when prompted.
+4. Run the notebook cells in order.
+5. Copy the printed ngrok URL and open `/docs` or `/health`.
+
+The notebook starts the same FastAPI backend you run locally, then exposes it over a temporary public ngrok URL.
+
 ## Common commands
 
 All commands below are run from `backend` unless noted.
@@ -333,10 +347,69 @@ Install all from:
 pip install -r backend/requirements.txt
 ```
 
+## Quick-Start Deployment
+
+### Local Full-Stack (Backend + Streamlit Frontend)
+
+**Terminal 1: Start Backend**
+
+```powershell
+$env:USE_HEURISTIC_PIPELINE = 'false'  # or 'true' for fast heuristic mode
+.\run_backend.ps1
+```
+
+Backend runs on `http://localhost:8000`
+
+**Terminal 2: Start Streamlit Frontend**
+
+```powershell
+$env:STREAMLIT_API_URL = 'http://localhost:8000'
+pip install -r requirements-streamlit.txt
+streamlit run streamlit_app.py
+```
+
+Frontend runs on `http://localhost:8501`
+
+### Public Deployment with ngrok
+
+Expose your local backend publicly:
+
+```powershell
+# Terminal 3: Create ngrok tunnel
+ngrok http 8000
+# Note the URL: https://abc-123.ngrok-free.dev
+```
+
+Then point Streamlit to the ngrok URL:
+
+```powershell
+$env:STREAMLIT_API_URL = 'https://abc-123.ngrok-free.dev'
+streamlit run streamlit_app.py
+```
+
+### Production Deployment
+
+For persistent production deployments with custom domains, see:
+
+- [DEPLOY_BACKEND.md](DEPLOY_BACKEND.md) — Backend deployment options (Docker, Render.com, self-hosted nginx).
+- [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) — Full deployment matrix and strategies.
+
+### Colab + GPU (Free Tier)
+
+For fast GPU-backed inference without a server:
+
+```text
+Open: colab_deployment.ipynb
+1. Switch runtime to GPU
+2. Set ngrok token
+3. Run notebook cells
+4. Use printed ngrok URL
+```
+
+See [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) for detailed steps.
+
 ## Contributor notes
 
 - Keep API and CLI behavior aligned via shared inference service.
 - Keep schema changes backward-compatible where possible.
 - Update tests and docs when changing endpoint behavior, scoring semantics, or config defaults.
-
-heehaa

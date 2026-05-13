@@ -457,7 +457,7 @@ risk_score = calculate_risk(flags)
 
 ---
 
-## How It Works During Deployment vs Locally
+## How It Works Locally vs in Colab
 
 ### Locally
 ```
@@ -465,7 +465,7 @@ risk_score = calculate_risk(flags)
 │ User runs: uvicorn app.main:app --reload    │
 │ Working directory: backend/                 │
 └─────────────────────────────────────────────┘
-        ↓
+      ↓
 ✓ Can read from outputs/ (relative path works)
 ✓ Models load from models/checkpoints/ (relative)
 ✓ Fast iteration (no rebuilding)
@@ -473,30 +473,30 @@ risk_score = calculate_risk(flags)
 ✓ GPU available if configured
 ```
 
-### On Render Deployment
+### In Colab with ngrok
 ```
 ┌─────────────────────────────────────────────┐
-│ Render builds Docker container              │
-│ Working directory: /app/backend/            │
+│ Colab installs dependencies + starts Uvicorn │
+│ Public URL exposed through ngrok tunnel      │
 └─────────────────────────────────────────────┘
-        ↓
-1. Build phase:
-   ✓ pip install -r requirements.txt
-   ✓ apt-get install ffmpeg libsm6 ...
-   ✓ bash init_deployment.sh (creates outputs/ dirs)
+      ↓
+1. Notebook phase:
+  ✓ Install ffmpeg and Python dependencies
+  ✓ Clone or mount the repo
+  ✓ Set ngrok auth token
+  ✓ Verify the GPU runtime
 
 2. Runtime phase:
-   ✓ Resolve paths using settings.backend_root
-   ✓ Relative paths work: outputs/batch_input/
-   ✓ Load models from /app/backend/models/
-   ✓ CPU only (no GPU on free plan)
-   ✓ Read-only filesystem except /tmp
+  ✓ Resolve paths using settings.backend_root
+  ✓ Relative paths work: outputs/batch_input/
+  ✓ Load models from backend/models/
+  ✓ GPU available when Colab provides it
+  ✓ Public HTTPS URL via ngrok
 
 3. Differences to handle:
-   ✗ No ffmpeg unless installed in buildCommand
-   ✗ No GPU for neural features
-   ✗ Limited memory (use heuristic mode)
-   ✗ Timeout limits (30 sec for free plan)
+  ✗ Session is temporary
+  ✗ ngrok URL can change when the runtime restarts
+  ✗ Notebook must stay open to keep the API live
 ```
 
 ---
@@ -541,11 +541,11 @@ SPE_MEDIA_LOOKUP_DIR = "outputs/batch_input"
 - 30-60 second video: 5-10 minutes total
 - Breakdown: Same as above but 3-5x slower
 
-### On Render (Free Plan)
-- 30-60 second video: 15-30 minutes total
-- Using heuristic mode: 2-5 minutes
-- Limited CPU, no GPU
-- May timeout on free plan (use Starter or disable extractions)
+### In Colab with GPU
+- 30-60 second video: 2-5 minutes total
+- Using heuristic mode: 1-3 minutes
+- GPU available depending on the runtime
+- Still temporary, but much faster than CPU-only hosting
 
 ---
 
@@ -563,11 +563,11 @@ curl -X POST http://localhost:8000/evaluate \
   -d @test_payload.json
 ```
 
-### View logs on Render
-1. Go to https://dashboard.render.com/
-2. Click your service
-3. Click "Logs" tab
-4. Watch real-time processing messages
+### View logs in Colab
+1. Read the notebook cell output directly.
+2. Watch the Uvicorn startup messages in the notebook.
+3. Use the `/health` endpoint through the ngrok URL.
+4. Re-run the startup cells if the session resets.
 
 ---
 
