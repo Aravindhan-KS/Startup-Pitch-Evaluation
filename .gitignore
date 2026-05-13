@@ -202,3 +202,4 @@ cython_debug/
 **/audio_chunks/
 **/frames/
 **/edge_staging/
+backend/.env
