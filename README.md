@@ -347,45 +347,75 @@ Install all from:
 pip install -r backend/requirements.txt
 ```
 
-## Quick-Start Deployment
+## Run modes
 
-### Local Full-Stack (Backend + Streamlit Frontend)
+### 1. Local backend/API
 
-**Terminal 1: Start Backend**
+Use this when you want to run the FastAPI service locally for development, testing, or CLI-based inference.
+
+**Terminal 1: start the backend**
 
 ```powershell
-$env:USE_HEURISTIC_PIPELINE = 'false'  # or 'true' for fast heuristic mode
+$env:USE_HEURISTIC_PIPELINE = 'false'  # or 'true' for deterministic heuristic mode
 .\run_backend.ps1
 ```
 
-Backend runs on `http://localhost:8000`
+The API is available at `http://localhost:8000`, with docs at `http://localhost:8000/docs`.
 
-**Terminal 2: Start Streamlit Frontend**
+If you prefer to run it manually:
 
 ```powershell
-$env:STREAMLIT_API_URL = 'http://localhost:8000'
+cd backend
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+### 2. Semi-local Streamlit + Firebase dashboard
+
+Use this when the Streamlit UI runs locally, but the data source is Firebase. The dashboard reads the `pitch_evaluations` collection and does not call the local FastAPI backend directly.
+
+**Terminal 2: install Streamlit dependencies**
+
+```powershell
 pip install -r requirements-streamlit.txt
+```
+
+**Terminal 3: configure Firebase secrets**
+
+Create `.streamlit/secrets.toml` with a Firebase service account payload:
+
+```toml
+[firebase]
+type = "service_account"
+project_id = "your-project-id"
+private_key_id = "..."
+private_key = "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+client_email = "..."
+client_id = "..."
+auth_uri = "https://accounts.google.com/o/oauth2/auth"
+token_uri = "https://oauth2.googleapis.com/token"
+auth_provider_x509_cert_url = "https://www.googleapis.com/oauth2/v1/certs"
+client_x509_cert_url = "..."
+```
+
+**Terminal 4: start Streamlit**
+
+```powershell
 streamlit run streamlit_app.py
 ```
 
-Frontend runs on `http://localhost:8501`
+The dashboard runs on `http://localhost:8501`.
 
-### Public Deployment with ngrok
+If you want live updates, run the evaluation pipeline or edge device locally so it writes results into Firestore. The Streamlit app will pick them up automatically.
 
-Expose your local backend publicly:
+### Optional: expose the local backend with ngrok
+
+If you want to share the backend API externally while keeping it local, create a tunnel such as:
 
 ```powershell
-# Terminal 3: Create ngrok tunnel
 ngrok http 8000
-# Note the URL: https://abc-123.ngrok-free.dev
 ```
 
-Then point Streamlit to the ngrok URL:
-
-```powershell
-$env:STREAMLIT_API_URL = 'https://abc-123.ngrok-free.dev'
-streamlit run streamlit_app.py
-```
+This is only needed for API access; it is not required for the Streamlit dashboard.
 
 ### Production Deployment
 
