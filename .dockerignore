@@ -1,0 +1,44 @@
+# Root-level .dockerignore — applies to all Dockerfiles at this context path
+.git
+.gitignore
+.gitattributes
+.devcontainer
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+
+# Don't bake secrets into images
+firebase_key.json
+secrets.toml
+.env
+backend/.env
+**/.env.local
+**/.env.*.local
+
+# Large output / dataset artifacts (mounted as volumes or not needed in image)
+backend/outputs/
+backend/datasets/
+dataset_tools/
+
+# Terraform state / local infra
+infra/.terraform/
+infra/*.tfstate
+infra/*.tfstate.backup
+infra/.terraform.lock.hcl
+infra/terraform.tfvars
+
+# Video samples not needed in image
+backend/outputs/edge_staging/
+
+# Docs / diagrams
+*.md
+*.jpeg
+*.jpg
+*.png
+Commands.txt
+render.yaml
+runtime.txt

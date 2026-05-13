@@ -1,8 +1,7 @@
 import logging
 import shutil
-from pathlib import Path
-import os
 import uuid
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Request
@@ -155,14 +154,14 @@ async def evaluate_pitch(request: Request):
         )
 
         result = inference_service.evaluate_payload(payload)
-        
+
         # Upload result to cloud database (include video title)
         try:
             result_dict = result.model_dump() if hasattr(result, "model_dump") else result
             upload_pitch_result(result_dict, video_title=resolved_title)
         except Exception as e:
             logger.warning(f"Cloud upload failed for request {result_dict.get('request_id', 'unknown')}: {e}")
-        
+
         return result
 
     # Otherwise expect JSON body
@@ -173,23 +172,19 @@ async def evaluate_pitch(request: Request):
 
     payload = PitchInput(**body)
     result = inference_service.evaluate_payload(payload)
-    
+
     # Upload result to cloud database (include video title if available)
     try:
         result_dict = result.model_dump() if hasattr(result, "model_dump") else result
         upload_pitch_result(result_dict, video_title=payload.title if getattr(payload, 'title', None) else None)
     except Exception as e:
         logger.warning(f"Cloud upload failed for request {result_dict.get('request_id', 'unknown')}: {e}")
-    
+
     return result
 
 
 @app.post(
     "/evaluate/upload",
-    responses={400: {"description": "Bad Request: video file is required"}},
-)
-@app.post(
-    "/evaulate/upload",
     responses={400: {"description": "Bad Request: video file is required"}},
 )
 async def evaluate_pitch_upload(
@@ -241,14 +236,14 @@ async def evaluate_pitch_upload(
     )
 
     result = inference_service.evaluate_payload(payload)
-    
+
     # Upload result to cloud database (include video title)
     try:
         result_dict = result.model_dump() if hasattr(result, "model_dump") else result
         upload_pitch_result(result_dict, video_title=resolved_title)
     except Exception as e:
         logger.warning(f"Cloud upload failed for request {result_dict.get('request_id', 'unknown')}: {e}")
-    
+
     return result
 
 
@@ -259,7 +254,7 @@ async def evaluate_pitch_upload(
 def evaluate_pitch_batch(payload: BatchEvaluationRequest) -> BatchEvaluationResponse:
     try:
         result = inference_service.evaluate_batch(payload.pitches)
-        
+
         # Upload each batch result to cloud database
         try:
             for evaluation in result.evaluations:
@@ -267,7 +262,7 @@ def evaluate_pitch_batch(payload: BatchEvaluationRequest) -> BatchEvaluationResp
                 upload_pitch_result(eval_dict)
         except Exception as e:
             logger.warning(f"Cloud batch upload failed: {e}")
-        
+
         return result
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -278,12 +273,12 @@ def list_videos() -> dict:
     """List all available videos in batch_input directory"""
     if not batch_input_dir.exists():
         return {"videos": []}
-    
+
     video_files = []
     for file in batch_input_dir.iterdir():
         if file.is_file() and file.suffix.lower() in [".mp4", ".avi", ".mov", ".mkv"]:
             video_files.append(file.name)
-    
+
     return {"videos": sorted(video_files)}
 
 
@@ -293,15 +288,15 @@ def get_video(video_name: str):
     # Prevent directory traversal
     if ".." in video_name or video_name.startswith("/"):
         raise HTTPException(status_code=400, detail="Invalid video name")
-    
+
     video_path = batch_input_dir / video_name
-    
+
     if not video_path.exists() or not video_path.is_file():
         raise HTTPException(status_code=404, detail="Video not found")
-    
+
     if video_path.suffix.lower() not in [".mp4", ".avi", ".mov", ".mkv"]:
         raise HTTPException(status_code=400, detail="Invalid video format")
-    
+
     return FileResponse(
         video_path,
         media_type=f"video/{video_path.suffix.lower().strip('.')}"

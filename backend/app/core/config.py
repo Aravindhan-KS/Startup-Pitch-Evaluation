@@ -1,13 +1,16 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
 from pathlib import Path
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[2]
+
+
 class Settings(BaseSettings):
     app_name: str = "Startup Pitch Evaluation API"
     app_version: str = "0.1.0"
     chunk_window_seconds: int = 5
-    
+
     # Phase 0: Migration control flags
     use_heuristic_pipeline: bool = True
     use_local_transcriber: bool = True
@@ -38,7 +41,7 @@ class Settings(BaseSettings):
     def backend_root(self) -> Path:
         """Returns the backend root directory"""
         return _BACKEND_ROOT
-    
+
     @property
     def checkpoint_full_path(self) -> Path:
         """Resolve checkpoint path from backend root"""
@@ -46,7 +49,7 @@ class Settings(BaseSettings):
         if not path.is_absolute():
             return _BACKEND_ROOT / path
         return path
-    
+
     @property
     def media_lookup_full_path(self) -> Path:
         """Resolve media directory from backend root"""

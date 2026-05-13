@@ -1,0 +1,6 @@
+# Example — copy to terraform.tfvars and fill in
+# (terraform.tfvars is gitignored)
+
+# aws_region          = "us-east-1"
+# project_name        = "pitch-eval"
+# ssh_public_key_path = "~/.ssh/id_rsa.pub"

@@ -1,0 +1,63 @@
+# ── Stage 1: install Python deps (CPU-only torch cuts image by ~2 GB) ──────────
+FROM python:3.11-slim AS deps
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+COPY backend/requirements.txt .
+
+# Install CPU-only torch first so pip doesn't pull the CUDA variant
+RUN pip install --no-cache-dir \
+    torch torchvision torchaudio \
+    --index-url https://download.pytorch.org/whl/cpu
+
+# Install the rest of the requirements (torch lines are already satisfied above)
+RUN pip install --no-cache-dir -r requirements.txt
+
+# ── Stage 2: pre-bake model weights so cold-start is instant ────────────────────
+FROM deps AS model-cache
+
+ENV HF_HOME=/root/.cache/huggingface
+
+# faster-whisper small (~461 MB) — downloads ctranslate2 weights
+RUN python - <<'EOF'
+from faster_whisper import WhisperModel
+WhisperModel("small", device="cpu", compute_type="int8")
+print("faster-whisper small model cached")
+EOF
+
+# sentence-transformers all-MiniLM-L6-v2 (~90 MB)
+RUN python - <<'EOF'
+from sentence_transformers import SentenceTransformer
+SentenceTransformer("all-MiniLM-L6-v2")
+print("sentence-transformers model cached")
+EOF
+
+# ── Stage 3: runtime image ──────────────────────────────────────────────────────
+FROM python:3.11-slim
+
+# System libs needed by OpenCV / librosa / imageio-ffmpeg
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg libsm6 libxext6 libxrender-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy installed packages and pre-downloaded models from earlier stages
+COPY --from=model-cache /usr/local/lib/python3.11 /usr/local/lib/python3.11
+COPY --from=model-cache /usr/local/bin /usr/local/bin
+COPY --from=model-cache /root/.cache/huggingface /root/.cache/huggingface
+
+# App source
+COPY backend/ .
+
+# Create runtime directories
+RUN bash init_deployment.sh
+
+EXPOSE 8000
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", \
+     "--workers", "1", "--timeout-keep-alive", "75"]

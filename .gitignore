@@ -203,3 +203,17 @@ cython_debug/
 **/audio_chunks/
 **/frames/
 **/batch_input/
+# Terraform
+infra/.terraform/
+infra/*.tfstate
+infra/*.tfstate.backup
+infra/.terraform.lock.hcl
+infra/terraform.tfvars
+
+# Deployment secrets (never commit these)
+firebase_key.json
+secrets.toml
+.env.deploy
+
+# Docker build artifacts
+/tmp/pitch-eval.env
