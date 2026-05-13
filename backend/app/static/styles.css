@@ -733,3 +733,128 @@ textarea:focus {
   color: var(--muted);
   margin-top: 0.3rem;
 }
+
+/* ── File upload zone ─────────────────────────────────────────────────────── */
+.upload-zone {
+  position: relative;
+  border: 2px dashed #c9b99a;
+  border-radius: 14px;
+  background: #fdf8f2;
+  padding: 1.6rem 1rem;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 180ms ease, background 180ms ease;
+}
+
+.upload-zone:hover,
+.upload-zone.drag-over {
+  border-color: var(--accent);
+  background: #fff5ee;
+}
+
+.upload-zone.has-file {
+  border-color: var(--teal);
+  background: #f3fbfa;
+  border-style: solid;
+}
+
+.upload-zone input[type="file"] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+
+.upload-hint {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  pointer-events: none;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.upload-hint svg {
+  color: var(--accent);
+  margin-bottom: 0.2rem;
+}
+
+.upload-sub {
+  font-size: 0.78rem;
+  color: #9aa0a8;
+}
+
+/* ── Upload progress bar ─────────────────────────────────────────────────── */
+.upload-progress {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.upload-progress.hidden { display: none; }
+
+.progress-bar-track {
+  height: 6px;
+  border-radius: 999px;
+  background: #ede4d8;
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--teal), #4aafa9);
+  transition: width 200ms ease;
+  width: 0%;
+}
+
+.progress-label {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+/* ── Video meta row ──────────────────────────────────────────────────────── */
+.video-meta-row {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.video-size {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.remove-btn {
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  padding: 0.28rem 0.7rem;
+}
+
+/* ── Purge / danger button ───────────────────────────────────────────────── */
+.ghost-danger {
+  background: #fff5f5;
+  border-color: #f0c0c0;
+  color: var(--danger);
+}
+
+.ghost-danger:hover {
+  background: #fee8e8;
+  border-color: var(--danger);
+}
+
+.ghost-danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Status text colour variants ─────────────────────────────────────────── */
+.status-text[data-kind="error"] { color: var(--danger); }

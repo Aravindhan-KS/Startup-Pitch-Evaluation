@@ -293,6 +293,24 @@ def evaluate_pitch_batch(payload: BatchEvaluationRequest) -> BatchEvaluationResp
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@app.post("/purge")
+def purge_uploads() -> dict:
+    """Delete all uploaded video files from the server to free EBS space."""
+    VIDEO_EXTS = {".mp4", ".mov", ".avi", ".mkv", ".webm"}
+    deleted_files = 0
+    freed_bytes = 0
+    for directory in (upload_dir, batch_input_dir):
+        if not directory.exists():
+            continue
+        for path in list(directory.iterdir()):
+            if path.is_file() and path.suffix.lower() in VIDEO_EXTS:
+                freed_bytes += path.stat().st_size
+                path.unlink()
+                deleted_files += 1
+    logger.info("Purged %d file(s), freed %.1f MB", deleted_files, freed_bytes / 1_048_576)
+    return {"deleted_files": deleted_files, "freed_bytes": freed_bytes, "status": "ok"}
+
+
 @app.get("/videos")
 def list_videos() -> dict:
     """List all available videos in batch_input directory"""

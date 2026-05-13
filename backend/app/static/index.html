@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Space+Grotesk:wght@400;500;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/static/styles.css?v=20260321a" />
+    <link rel="stylesheet" href="/static/styles.css?v=20260514a" />
   </head>
   <body>
     <div class="ambient ambient-one"></div>
@@ -22,14 +22,17 @@
         <p class="eyebrow">Investor Lens</p>
         <h1>Startup Pitch Evaluation Studio</h1>
         <p class="subhead">
-          Craft your pitch on the left and inspect investor-ready signals on the
-          right.
+          Upload your pitch video on the left and inspect investor-ready signals
+          on the right.
         </p>
       </div>
       <div class="topbar-actions">
         <div id="modeBadge" class="mode-badge" aria-live="polite">
           Scoring Mode: loading...
         </div>
+        <button id="purgeBtn" class="ghost-btn ghost-danger" type="button">
+          Purge Data
+        </button>
         <button id="clearBtn" class="ghost-btn ghost-alt" type="button">
           Clear
         </button>
@@ -40,17 +43,33 @@
       <section class="panel input-panel">
         <div class="panel-header">
           <h2>Pitch Input</h2>
-          <p>Compose the startup pitch content and evaluate instantly.</p>
+          <p>Upload a video and fill in pitch details to evaluate instantly.</p>
         </div>
 
-        <!-- Video Player Section -->
+        <!-- File Upload Section -->
         <div class="video-section">
-          <div class="video-header">
-            <label for="videoSelect">Load Video</label>
-            <select id="videoSelect" class="video-select">
-              <option value="">Select a video...</option>
-            </select>
+          <div class="upload-zone" id="uploadZone">
+            <input
+              type="file"
+              id="videoUpload"
+              accept="video/mp4,video/quicktime,video/x-msvideo,video/x-matroska,video/webm,.mp4,.mov,.avi,.mkv,.webm"
+            />
+            <div class="upload-hint" id="uploadHint">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
+              <span>Drop video here or <strong>click to browse</strong></span>
+              <span class="upload-sub">MP4 · MOV · MKV · AVI · WEBM &nbsp;·&nbsp; max 500 MB</span>
+            </div>
           </div>
+
+          <!-- Upload progress -->
+          <div id="uploadProgress" class="upload-progress hidden">
+            <div class="progress-bar-track">
+              <div class="progress-bar-fill" id="progressFill"></div>
+            </div>
+            <span id="progressLabel" class="progress-label">Uploading…</span>
+          </div>
+
+          <!-- Video preview -->
           <div id="videoContainer" class="video-container hidden">
             <video
               id="pitchVideo"
@@ -62,7 +81,13 @@
             </video>
             <div class="video-info">
               <p id="videoTitle" class="video-title"></p>
-              <p id="videoDuration" class="video-duration"></p>
+              <div class="video-meta-row">
+                <p id="videoDuration" class="video-duration"></p>
+                <p id="videoSize" class="video-size"></p>
+              </div>
+              <button id="removeVideoBtn" class="ghost-btn ghost-alt remove-btn" type="button">
+                ✕ Remove
+              </button>
             </div>
           </div>
         </div>
@@ -159,7 +184,7 @@
         </div>
 
         <article id="evaluationPlaceholder" class="placeholder">
-          Submit a pitch to render evaluation insights.
+          Upload a pitch video and submit to render evaluation insights.
         </article>
 
         <article id="evaluationResults" class="evaluation-results hidden">
@@ -217,6 +242,6 @@
       </section>
     </main>
 
-    <script type="module" src="/static/app.js?v=20260403b"></script>
+    <script type="module" src="/static/app.js?v=20260514a"></script>
   </body>
 </html>

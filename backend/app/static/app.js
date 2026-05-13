@@ -1,49 +1,63 @@
-const form = document.getElementById("pitchForm");
-const clearBtn = document.getElementById("clearBtn");
-const evaluateBtn = document.getElementById("evaluateBtn");
-const statusText = document.getElementById("statusText");
-const pitchPreview = document.getElementById("pitchPreview");
-const modeBadge = document.getElementById("modeBadge");
+// ── DOM refs ──────────────────────────────────────────────────────────────────
+const form          = document.getElementById("pitchForm");
+const clearBtn      = document.getElementById("clearBtn");
+const purgeBtn      = document.getElementById("purgeBtn");
+const evaluateBtn   = document.getElementById("evaluateBtn");
+const statusText    = document.getElementById("statusText");
+const pitchPreview  = document.getElementById("pitchPreview");
+const modeBadge     = document.getElementById("modeBadge");
 
 const evaluationPlaceholder = document.getElementById("evaluationPlaceholder");
-const evaluationResults = document.getElementById("evaluationResults");
-const summaryCard = document.getElementById("summaryCard");
-const quantScores = document.getElementById("quantScores");
-const modalityWeights = document.getElementById("modalityWeights");
-const riskDistribution = document.getElementById("riskDistribution");
-const guidanceList = document.getElementById("guidanceList");
-const chunkReports = document.getElementById("chunkReports");
-const rawJson = document.getElementById("rawJson");
-const overallKpi = document.getElementById("overallKpi");
-const confidenceKpi = document.getElementById("confidenceKpi");
-const bandKpi = document.getElementById("bandKpi");
-const outputPanel = document.querySelector(".output-panel");
+const evaluationResults     = document.getElementById("evaluationResults");
+const summaryCard           = document.getElementById("summaryCard");
+const quantScores           = document.getElementById("quantScores");
+const modalityWeights       = document.getElementById("modalityWeights");
+const riskDistribution      = document.getElementById("riskDistribution");
+const guidanceList          = document.getElementById("guidanceList");
+const chunkReports          = document.getElementById("chunkReports");
+const rawJson               = document.getElementById("rawJson");
+const overallKpi            = document.getElementById("overallKpi");
+const confidenceKpi         = document.getElementById("confidenceKpi");
+const bandKpi               = document.getElementById("bandKpi");
+const outputPanel           = document.querySelector(".output-panel");
 
-// Video player elements
-const videoSelect = document.getElementById("videoSelect");
-const videoContainer = document.getElementById("videoContainer");
-const pitchVideo = document.getElementById("pitchVideo");
-const videoTitle = document.getElementById("videoTitle");
-const videoDuration = document.getElementById("videoDuration");
+// Upload + video preview
+const uploadZone      = document.getElementById("uploadZone");
+const videoUpload     = document.getElementById("videoUpload");
+const uploadHint      = document.getElementById("uploadHint");
+const uploadProgress  = document.getElementById("uploadProgress");
+const progressFill    = document.getElementById("progressFill");
+const progressLabel   = document.getElementById("progressLabel");
+const videoContainer  = document.getElementById("videoContainer");
+const pitchVideo      = document.getElementById("pitchVideo");
+const videoTitle      = document.getElementById("videoTitle");
+const videoDuration   = document.getElementById("videoDuration");
+const videoSize       = document.getElementById("videoSize");
+const removeVideoBtn  = document.getElementById("removeVideoBtn");
+
+// Rating panel
 const videoRatingPanel = document.getElementById("videoRatingPanel");
-const finalScore = document.getElementById("finalScore");
-const videoRatingBand = document.getElementById("videoRatingBand");
-const videoRatingText = document.getElementById("videoRatingText");
+const finalScore       = document.getElementById("finalScore");
+const videoRatingBand  = document.getElementById("videoRatingBand");
+const videoRatingText  = document.getElementById("videoRatingText");
 
-let selectedVideoFileName = "pitch.mp4";
-let selectedVideoDurationSec = 120;
-let latestRating = null;
-let currentScoringMode = "unknown";
+// ── State ─────────────────────────────────────────────────────────────────────
+const MAX_FILE_BYTES = 500 * 1024 * 1024; // 500 MB — matches nginx + EBS headroom
+let   selectedFile        = null;
+let   localObjectUrl      = null;
+let   latestRating        = null;
+let   currentScoringMode  = "unknown";
 
 const fields = {
-  title: document.getElementById("title"),
-  slideText: document.getElementById("slideText"),
+  title:       document.getElementById("title"),
+  slideText:   document.getElementById("slideText"),
   founderName: document.getElementById("founderName"),
   startupName: document.getElementById("startupName"),
-  sector: document.getElementById("sector"),
-  stage: document.getElementById("stage"),
+  sector:      document.getElementById("sector"),
+  stage:       document.getElementById("stage"),
 };
 
+// ── Utilities ─────────────────────────────────────────────────────────────────
 function escapeHtml(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -54,362 +68,12 @@ function escapeHtml(value) {
 }
 
 function listFromTextarea(value) {
-  return value
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
+  return value.split("\n").map((l) => l.trim()).filter(Boolean);
 }
 
-function toPayload() {
-  const slidePoints = listFromTextarea(fields.slideText.value);
-  const inferredDuration = Number.isFinite(Number(pitchVideo.duration))
-    ? Math.max(5, Math.round(Number(pitchVideo.duration)))
-    : selectedVideoDurationSec;
-
-  return {
-    title: fields.title.value.trim() || "Untitled Pitch",
-    transcript: "",
-    language_hint: "en-ta",
-    presenter_profile: { experience: "Unknown" },
-    slide_text: slidePoints,
-    video: {
-      file_name: selectedVideoFileName,
-      file_format: "mp4",
-      duration_sec: inferredDuration,
-      transcript_text: "",
-    },
-    slides: slidePoints.map((point, idx) => ({
-      title: `Slide ${idx + 1}`,
-      content: point,
-    })),
-    user_details: {
-      founder_name: fields.founderName.value.trim(),
-      startup_name:
-        fields.startupName.value.trim() || fields.title.value.trim(),
-      sector: fields.sector.value.trim(),
-      stage: fields.stage.value.trim(),
-    },
-  };
-}
-
-function renderPitchPreview(payload) {
-  pitchPreview.innerHTML = `
-    <h3>${escapeHtml(payload.title)}</h3>
-    <p><strong>Founder:</strong> ${escapeHtml(payload.user_details.founder_name || "N/A")}</p>
-    <p><strong>Sector:</strong> ${escapeHtml(payload.user_details.sector || "N/A")} | <strong>Stage:</strong> ${escapeHtml(payload.user_details.stage || "N/A")}</p>
-    <p><strong>Slides:</strong> ${payload.slides.length}</p>
-  `;
-}
-
-function rowHtml(name, value) {
-  return `<div class="row-item"><span>${escapeHtml(name)}</span><strong>${escapeHtml(value)}</strong></div>`;
-}
-
-function renderBars(container, points, maxValue, kind) {
-  container.innerHTML = "";
-  if (!points || points.length === 0) {
-    container.innerHTML = '<p class="small">No data.</p>';
-    return;
-  }
-
-  container.innerHTML = points
-    .map((point) => {
-      const rawValue = Number(point.value || 0);
-      const safeValue = Number.isFinite(rawValue) ? rawValue : 0;
-      const percent = Math.max(0, Math.min(100, (safeValue / maxValue) * 100));
-      const fillClass = kind === "modality" ? "bar-fill modality" : "bar-fill";
-      const displayValue =
-        kind === "modality"
-          ? `${(safeValue * 100).toFixed(1)}%`
-          : safeValue.toFixed(2);
-      return `
-        <div class="bar-row">
-          <div>
-            <div class="bar-label">${escapeHtml(point.label)}</div>
-            <div class="bar-track"><div class="${fillClass}" style="width:${percent.toFixed(1)}%"></div></div>
-          </div>
-          <div class="bar-value">${displayValue}</div>
-        </div>
-      `;
-    })
-    .join("");
-}
-
-function renderGuidance(summary) {
-  guidanceList.innerHTML = `
-    <div class="guidance-block">
-      <p><strong>Strengths:</strong> ${escapeHtml((summary.strengths || []).join(", ") || "-")}</p>
-      <p><strong>Weaknesses:</strong> ${escapeHtml((summary.weaknesses || []).join(", ") || "-")}</p>
-      <p><strong>Suggestions:</strong> ${escapeHtml((summary.suggestions || []).join(", ") || "-")}</p>
-    </div>
-  `;
-}
-
-function renderSummary(summary) {
-  const bandClass = `band-${summary.investment_band}`;
-  const overall = Number(summary.overall_score || 0);
-  const confidence = Number(summary.confidence_score || 0);
-  const scoringMode = currentScoringMode || "unknown";
-
-  summaryCard.innerHTML = `
-    <h3>Overall Summary</h3>
-    <div class="summary-score">
-      <span>Score</span>
-      <strong>${overall.toFixed(2)}</strong>
-      <span>/ 10</span>
-    </div>
-    <p><strong>Language Detected:</strong> ${escapeHtml(summary.language_detected)}</p>
-    <p><strong>Scoring Mode:</strong> ${escapeHtml(scoringMode)}</p>
-    <p><strong>Processing Option:</strong> ${escapeHtml(summary.processing_option || "unknown")}</p>
-    <p><strong>Runtime:</strong> ${escapeHtml((summary.processing_notes || []).join(" | ") || "-")}</p>
-    <span class="band-pill ${bandClass}">${escapeHtml(summary.investment_band)}</span>
-  `;
-
-  overallKpi.textContent = `${overall.toFixed(2)} / 10`;
-  confidenceKpi.textContent = `${confidence.toFixed(2)} / 10`;
-  bandKpi.textContent = summary.investment_band || "-";
-}
-
-function renderRisks(points) {
-  if (!points || points.length === 0) {
-    riskDistribution.innerHTML =
-      '<p class="small">No explicit risk flags detected.</p>';
-    return;
-  }
-  riskDistribution.innerHTML = points
-    .map((point) => rowHtml(point.label, String(point.value)))
-    .join("");
-}
-
-function renderChunks(chunks) {
-  chunkReports.innerHTML = "";
-  if (!chunks || chunks.length === 0) {
-    chunkReports.innerHTML = '<p class="small">No chunk reports.</p>';
-    return;
-  }
-
-  chunkReports.innerHTML = chunks
-    .map((chunk) => {
-      const risks = (chunk.risk_flags || []).length
-        ? chunk.risk_flags
-            .map(
-              (risk) =>
-                `<span class="chip chip-risk">${escapeHtml(risk)}</span>`,
-            )
-            .join("")
-        : `<span class="chip">No risk flags</span>`;
-
-      const textMetricRows = (chunk.text_metrics || [])
-        .map((metric) =>
-          rowHtml(metric.name, Number(metric.score || 0).toFixed(2)),
-        )
-        .join("");
-
-      const avMetricRows = (chunk.av_metrics || [])
-        .map((metric) =>
-          rowHtml(metric.name, Number(metric.score || 0).toFixed(2)),
-        )
-        .join("");
-
-      return `
-        <article class="chunk-card">
-          <div class="chunk-title">
-            <h4>Chunk #${escapeHtml(chunk.chunk_id)}</h4>
-            <span class="chunk-meta">${escapeHtml(chunk.start_sec)}s-${escapeHtml(chunk.end_sec)}s</span>
-          </div>
-          <p><strong>Aggregate:</strong> ${Number(chunk.aggregate_score || 0).toFixed(2)} | <strong>Attention:</strong> T ${Number(chunk.attention?.text || 0).toFixed(2)} / V ${Number(chunk.attention?.visual || 0).toFixed(2)} / A ${Number(chunk.attention?.audio || 0).toFixed(2)}</p>
-          <div>${risks}</div>
-          <details>
-            <summary>Expand chunk metrics</summary>
-            <div class="chunk-subgrid">
-              <div class="list-card">${textMetricRows || '<p class="small">No text metrics.</p>'}</div>
-              <div class="list-card">${avMetricRows || '<p class="small">No AV metrics.</p>'}</div>
-            </div>
-          </details>
-        </article>
-      `;
-    })
-    .join("");
-}
-
-function showError(message) {
-  evaluationPlaceholder.classList.remove("hidden");
-  evaluationPlaceholder.textContent = message;
-  evaluationResults.classList.add("hidden");
-}
-
-function setLoading(isLoading) {
-  evaluateBtn.disabled = isLoading;
-  outputPanel.classList.toggle("is-loading", isLoading);
-  statusText.textContent = isLoading
-    ? "Evaluating your pitch..."
-    : statusText.textContent;
-}
-
-async function evaluatePitch(payload) {
-  setLoading(true);
-
-  try {
-    const response = await fetch("/evaluate", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      const maybeError = await response.text();
-      throw new Error(
-        `Request failed (${response.status}): ${maybeError.slice(0, 220)}`,
-      );
-    }
-
-    const result = await response.json();
-
-    renderSummary(result.summary || {});
-    renderBars(
-      quantScores,
-      result.dashboard?.quantitative_scores || [],
-      10,
-      "score",
-    );
-    renderBars(
-      modalityWeights,
-      result.dashboard?.modality_weights || [],
-      1,
-      "modality",
-    );
-    renderRisks(result.dashboard?.risk_distribution || []);
-    renderGuidance(result.summary || {});
-    renderChunks(result.chunk_reports || []);
-    rawJson.textContent = JSON.stringify(result, null, 2);
-
-    const overall = Number(result.summary?.overall_score || 0);
-    latestRating = {
-      score: overall.toFixed(2),
-      band: result.summary?.investment_band || "-",
-    };
-    showLatestRatingPanel();
-
-    evaluationPlaceholder.classList.add("hidden");
-    evaluationResults.classList.remove("hidden");
-    statusText.textContent = "Evaluation complete.";
-    evaluationResults.scrollIntoView({ behavior: "smooth", block: "start" });
-  } catch (err) {
-    showError(
-      err.message || "Something went wrong while evaluating the pitch.",
-    );
-    statusText.textContent = "Evaluation failed.";
-  } finally {
-    setLoading(false);
-  }
-}
-
-function clearForm() {
-  // Full reset to match refreshed page behavior.
-  globalThis.location.reload();
-}
-
-function fillSample() {
-  fields.title.value = "RetailPulse";
-  fields.slideText.value =
-    "Problem: stock mismatch creates losses\nSolution: demand forecasting with bilingual AI guidance\nTraction: 12 stores, 18% inventory efficiency gain\nGo-to-market: channel partners and distributor referrals";
-  fields.founderName.value = "A. Founder";
-  fields.startupName.value = "RetailPulse";
-  fields.sector.value = "RetailTech";
-  fields.stage.value = "Seed";
-
-  renderPitchPreview(toPayload());
-}
-
-form.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const payload = toPayload();
-  renderPitchPreview(payload);
-  await evaluatePitch(payload);
-});
-
-clearBtn.addEventListener("click", () => {
-  clearForm();
-});
-
-function normalizeScoringMode(value) {
-  const mode = String(value || "")
-    .trim()
-    .toLowerCase();
-  if (mode.includes("heuristic")) {
-    return "heuristic";
-  }
-  if (mode.includes("neural")) {
-    return "neural-network";
-  }
-  return mode || "unknown";
-}
-
-function updateScoringModeBadge(mode) {
-  if (!modeBadge) {
-    return;
-  }
-  currentScoringMode = normalizeScoringMode(mode);
-  modeBadge.textContent = `Scoring Mode: ${currentScoringMode}`;
-  modeBadge.classList.toggle(
-    "is-heuristic",
-    currentScoringMode === "heuristic",
-  );
-  modeBadge.classList.toggle(
-    "is-neural",
-    currentScoringMode === "neural-network",
-  );
-}
-
-async function loadScoringMode() {
-  try {
-    const response = await fetch("/scoring-mode");
-    if (!response.ok) {
-      throw new Error(
-        `Scoring mode endpoint failed with status ${response.status}`,
-      );
-    }
-    const data = await response.json();
-    updateScoringModeBadge(data.scoring_mode);
-  } catch (err) {
-    console.error("Failed to load scoring mode:", err);
-    updateScoringModeBadge("unknown");
-  }
-}
-
-Object.values(fields)
-  .filter(Boolean)
-  .forEach((field) => {
-    field.addEventListener("input", () => renderPitchPreview(toPayload()));
-  });
-
-// Video player functions
-async function loadVideoList() {
-  try {
-    const response = await fetch("/videos");
-    const data = await response.json();
-
-    // Clear current options except the placeholder
-    const selectedValue = videoSelect.value;
-    videoSelect.innerHTML = '<option value="">Select a video...</option>';
-
-    // Add video options
-    data.videos.forEach((video) => {
-      const option = document.createElement("option");
-      option.value = video;
-      option.textContent = video;
-      videoSelect.appendChild(option);
-    });
-
-    // Restore selection if it still exists
-    if (selectedValue && data.videos.includes(selectedValue)) {
-      videoSelect.value = selectedValue;
-    }
-  } catch (err) {
-    console.error("Failed to load videos:", err);
-  }
+function formatBytes(bytes) {
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function formatDuration(seconds) {
@@ -418,84 +82,374 @@ function formatDuration(seconds) {
   return `${mins}:${secs.toString().padStart(2, "0")}`;
 }
 
-function hideVideoRatingPanel() {
+// ── Pitch preview ─────────────────────────────────────────────────────────────
+function buildPreviewData() {
+  const slidePoints = listFromTextarea(fields.slideText.value);
+  return {
+    title:      fields.title.value.trim() || "Untitled Pitch",
+    user_details: {
+      founder_name: fields.founderName.value.trim(),
+      startup_name: fields.startupName.value.trim() || fields.title.value.trim(),
+      sector:       fields.sector.value.trim(),
+      stage:        fields.stage.value.trim(),
+    },
+    slides: slidePoints,
+  };
+}
+
+function renderPitchPreview(data) {
+  pitchPreview.innerHTML = `
+    <h3>${escapeHtml(data.title)}</h3>
+    <p><strong>Founder:</strong> ${escapeHtml(data.user_details.founder_name || "N/A")}</p>
+    <p><strong>Sector:</strong> ${escapeHtml(data.user_details.sector || "N/A")} · <strong>Stage:</strong> ${escapeHtml(data.user_details.stage || "N/A")}</p>
+    <p><strong>Slides:</strong> ${data.slides.length} · <strong>Video:</strong> ${selectedFile ? escapeHtml(selectedFile.name) : "none"}</p>
+  `;
+}
+
+// ── File upload handling ───────────────────────────────────────────────────────
+function applyFile(file) {
+  if (!file) return;
+
+  if (file.size > MAX_FILE_BYTES) {
+    setStatus(`File too large (${formatBytes(file.size)}). Max is 500 MB.`, "error");
+    return;
+  }
+
+  // Revoke any previous object URL to free memory
+  if (localObjectUrl) {
+    URL.revokeObjectURL(localObjectUrl);
+    localObjectUrl = null;
+  }
+
+  selectedFile   = file;
+  localObjectUrl = URL.createObjectURL(file);
+
+  pitchVideo.src   = localObjectUrl;
+  videoTitle.textContent = file.name;
+  videoSize.textContent  = formatBytes(file.size);
+  videoContainer.classList.remove("hidden");
+  uploadZone.classList.add("has-file");
+
+  // Auto-fill title from filename if blank
+  if (!fields.title.value.trim()) {
+    fields.title.value = file.name.replace(/\.[^.]+$/, "");
+    renderPitchPreview(buildPreviewData());
+  }
+}
+
+function clearVideo() {
+  if (localObjectUrl) {
+    URL.revokeObjectURL(localObjectUrl);
+    localObjectUrl = null;
+  }
+  selectedFile = null;
+  pitchVideo.src = "";
+  pitchVideo.load();
+  videoContainer.classList.add("hidden");
+  uploadZone.classList.remove("has-file");
+  videoUpload.value = "";
+  videoDuration.textContent = "";
+  videoSize.textContent     = "";
+  videoTitle.textContent    = "";
   videoRatingPanel.classList.add("hidden");
 }
 
-function showVideoRatingPanel(score, band) {
-  finalScore.textContent = score;
-  videoRatingBand.textContent = band || "Evaluating...";
+// ── Drag-and-drop ─────────────────────────────────────────────────────────────
+uploadZone.addEventListener("dragover", (e) => {
+  e.preventDefault();
+  uploadZone.classList.add("drag-over");
+});
+
+uploadZone.addEventListener("dragleave", () => {
+  uploadZone.classList.remove("drag-over");
+});
+
+uploadZone.addEventListener("drop", (e) => {
+  e.preventDefault();
+  uploadZone.classList.remove("drag-over");
+  const file = e.dataTransfer?.files?.[0];
+  if (file) applyFile(file);
+});
+
+videoUpload.addEventListener("change", () => {
+  const file = videoUpload.files?.[0];
+  if (file) applyFile(file);
+});
+
+removeVideoBtn.addEventListener("click", clearVideo);
+
+pitchVideo.addEventListener("loadedmetadata", () => {
+  const dur = pitchVideo.duration;
+  if (Number.isFinite(dur)) {
+    videoDuration.textContent = `Duration: ${formatDuration(dur)}`;
+  }
+});
+
+pitchVideo.addEventListener("ended", () => {
+  setTimeout(() => { if (latestRating) showRatingPanel(latestRating.score, latestRating.band); }, 2000);
+});
+
+// ── Rating panel ──────────────────────────────────────────────────────────────
+function showRatingPanel(score, band) {
+  finalScore.textContent   = score;
+  videoRatingBand.textContent = band || "—";
   videoRatingText.textContent = "Rating based on video analysis";
   videoRatingPanel.classList.remove("hidden");
 }
 
-function showLatestRatingPanel() {
-  if (!latestRating) {
-    return;
-  }
-  showVideoRatingPanel(latestRating.score, latestRating.band);
+// ── Status helpers ────────────────────────────────────────────────────────────
+function setStatus(msg, kind = "info") {
+  statusText.textContent = msg;
+  statusText.dataset.kind = kind;
 }
 
-function handleVideoEnded() {
-  // Buffer time of 2 seconds before showing rating
-  const bufferTimeMs = 2000;
-
-  setTimeout(() => {
-    showLatestRatingPanel();
-  }, bufferTimeMs);
+function setLoading(isLoading) {
+  evaluateBtn.disabled = isLoading;
+  outputPanel.classList.toggle("is-loading", isLoading);
 }
 
-function handleVideoSelect(event) {
-  const videoName = event.target.value;
+function showError(message) {
+  evaluationPlaceholder.classList.remove("hidden");
+  evaluationPlaceholder.textContent = message;
+  evaluationResults.classList.add("hidden");
+}
 
-  if (!videoName) {
-    selectedVideoFileName = "pitch.mp4";
-    selectedVideoDurationSec = 120;
-    pitchVideo.removeAttribute("src");
-    pitchVideo.load();
-    videoContainer.classList.add("hidden");
-    hideVideoRatingPanel();
-    return;
-  }
+// ── Progress bar ──────────────────────────────────────────────────────────────
+function setProgress(pct, label) {
+  uploadProgress.classList.remove("hidden");
+  progressFill.style.width = `${Math.min(100, pct).toFixed(1)}%`;
+  progressLabel.textContent = label;
+}
 
-  selectedVideoFileName = videoName;
-  selectedVideoDurationSec = 120;
+function hideProgress() {
+  uploadProgress.classList.add("hidden");
+  progressFill.style.width = "0%";
+}
 
-  // Set video source and show container
-  pitchVideo.src = `/videos/${encodeURIComponent(videoName)}`;
-  videoTitle.textContent = videoName;
-  videoContainer.classList.remove("hidden");
-  hideVideoRatingPanel();
+// ── Evaluate (multipart upload + XHR for progress) ───────────────────────────
+function evaluateWithFile(file) {
+  return new Promise((resolve, reject) => {
+    const fd = new FormData();
+    fd.append("video",        file, file.name);
+    fd.append("title",        fields.title.value.trim() || file.name.replace(/\.[^.]+$/, ""));
+    fd.append("transcript",   "");
+    fd.append("language_hint","en-ta");
+    fd.append("slide_text",   fields.slideText.value.trim());
+    fd.append("founder_name", fields.founderName.value.trim());
+    fd.append("startup_name", fields.startupName.value.trim() || fields.title.value.trim());
+    fd.append("sector",       fields.sector.value.trim());
+    fd.append("stage",        fields.stage.value.trim());
 
-  // Update form fields with video name if needed
-  if (!fields.title.value) {
-    fields.title.value = videoName.replace(/\.[^.]+$/, ""); // Remove extension
-    renderPitchPreview(toPayload());
-  }
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/evaluate");
 
-  // Play the video
-  pitchVideo.play().catch((err) => {
-    console.error("Failed to play video:", err);
+    xhr.upload.addEventListener("progress", (e) => {
+      if (e.lengthComputable) {
+        const pct = (e.loaded / e.total) * 100;
+        setProgress(pct, pct < 100
+          ? `Uploading… ${formatBytes(e.loaded)} / ${formatBytes(e.total)}`
+          : "Processing pipeline…"
+        );
+      }
+    });
+
+    xhr.addEventListener("load", () => {
+      hideProgress();
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try { resolve(JSON.parse(xhr.responseText)); }
+        catch { reject(new Error("Invalid JSON response from server")); }
+      } else {
+        reject(new Error(`Server error ${xhr.status}: ${xhr.responseText.slice(0, 220)}`));
+      }
+    });
+
+    xhr.addEventListener("error",  () => { hideProgress(); reject(new Error("Network error during upload")); });
+    xhr.addEventListener("abort",  () => { hideProgress(); reject(new Error("Upload aborted")); });
+    xhr.addEventListener("timeout",() => { hideProgress(); reject(new Error("Upload timed out")); });
+
+    xhr.timeout = 10 * 60 * 1000; // 10 min for large files + inference
+    xhr.send(fd);
   });
 }
 
-// Video event listeners
-videoSelect.addEventListener("change", handleVideoSelect);
+// ── Render results ────────────────────────────────────────────────────────────
+function rowHtml(name, value) {
+  return `<div class="row-item"><span>${escapeHtml(name)}</span><strong>${escapeHtml(value)}</strong></div>`;
+}
 
-pitchVideo.addEventListener("loadedmetadata", () => {
-  const duration = pitchVideo.duration;
-  if (Number.isFinite(duration)) {
-    selectedVideoDurationSec = Math.max(5, Math.round(duration));
+function renderBars(container, points, maxValue, kind) {
+  container.innerHTML = "";
+  if (!points?.length) { container.innerHTML = '<p class="small">No data.</p>'; return; }
+  container.innerHTML = points.map((pt) => {
+    const val     = Number.isFinite(Number(pt.value)) ? Number(pt.value) : 0;
+    const pct     = Math.max(0, Math.min(100, (val / maxValue) * 100));
+    const display = kind === "modality" ? `${(val * 100).toFixed(1)}%` : val.toFixed(2);
+    return `
+      <div class="bar-row">
+        <div>
+          <div class="bar-label">${escapeHtml(pt.label)}</div>
+          <div class="bar-track"><div class="${kind === "modality" ? "bar-fill modality" : "bar-fill"}" style="width:${pct.toFixed(1)}%"></div></div>
+        </div>
+        <div class="bar-value">${display}</div>
+      </div>`;
+  }).join("");
+}
+
+function renderGuidance(summary) {
+  guidanceList.innerHTML = `
+    <div class="guidance-block">
+      <p><strong>Strengths:</strong> ${escapeHtml((summary.strengths || []).join(", ") || "-")}</p>
+      <p><strong>Weaknesses:</strong> ${escapeHtml((summary.weaknesses || []).join(", ") || "-")}</p>
+      <p><strong>Suggestions:</strong> ${escapeHtml((summary.suggestions || []).join(", ") || "-")}</p>
+    </div>`;
+}
+
+function renderSummary(summary) {
+  const overall    = Number(summary.overall_score    || 0);
+  const confidence = Number(summary.confidence_score || 0);
+  summaryCard.innerHTML = `
+    <h3>Overall Summary</h3>
+    <div class="summary-score">
+      <span>Score</span><strong>${overall.toFixed(2)}</strong><span>/ 10</span>
+    </div>
+    <p><strong>Language Detected:</strong> ${escapeHtml(summary.language_detected)}</p>
+    <p><strong>Scoring Mode:</strong> ${escapeHtml(currentScoringMode || "unknown")}</p>
+    <p><strong>Processing Option:</strong> ${escapeHtml(summary.processing_option || "unknown")}</p>
+    <p><strong>Runtime:</strong> ${escapeHtml((summary.processing_notes || []).join(" | ") || "-")}</p>
+    <span class="band-pill band-${escapeHtml(summary.investment_band)}">${escapeHtml(summary.investment_band)}</span>`;
+  overallKpi.textContent    = `${overall.toFixed(2)} / 10`;
+  confidenceKpi.textContent = `${confidence.toFixed(2)} / 10`;
+  bandKpi.textContent       = summary.investment_band || "-";
+}
+
+function renderRisks(points) {
+  riskDistribution.innerHTML = points?.length
+    ? points.map((p) => rowHtml(p.label, String(p.value))).join("")
+    : '<p class="small">No explicit risk flags detected.</p>';
+}
+
+function renderChunks(chunks) {
+  if (!chunks?.length) { chunkReports.innerHTML = '<p class="small">No chunk reports.</p>'; return; }
+  chunkReports.innerHTML = chunks.map((chunk) => {
+    const risks = chunk.risk_flags?.length
+      ? chunk.risk_flags.map((r) => `<span class="chip chip-risk">${escapeHtml(r)}</span>`).join("")
+      : `<span class="chip">No risk flags</span>`;
+    const textRows = (chunk.text_metrics || []).map((m) => rowHtml(m.name, Number(m.score || 0).toFixed(2))).join("");
+    const avRows   = (chunk.av_metrics   || []).map((m) => rowHtml(m.name, Number(m.score || 0).toFixed(2))).join("");
+    return `
+      <article class="chunk-card">
+        <div class="chunk-title">
+          <h4>Chunk #${escapeHtml(String(chunk.chunk_id))}</h4>
+          <span class="chunk-meta">${escapeHtml(String(chunk.start_sec))}s–${escapeHtml(String(chunk.end_sec))}s</span>
+        </div>
+        <p><strong>Aggregate:</strong> ${Number(chunk.aggregate_score || 0).toFixed(2)} &nbsp;|&nbsp;
+           <strong>Attention:</strong> T ${Number(chunk.attention?.text   || 0).toFixed(2)} /
+                                        V ${Number(chunk.attention?.visual || 0).toFixed(2)} /
+                                        A ${Number(chunk.attention?.audio  || 0).toFixed(2)}</p>
+        <div>${risks}</div>
+        <details>
+          <summary>Expand chunk metrics</summary>
+          <div class="chunk-subgrid">
+            <div class="list-card">${textRows || '<p class="small">No text metrics.</p>'}</div>
+            <div class="list-card">${avRows   || '<p class="small">No AV metrics.</p>'}</div>
+          </div>
+        </details>
+      </article>`;
+  }).join("");
+}
+
+// ── Form submit ───────────────────────────────────────────────────────────────
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+
+  if (!selectedFile) {
+    setStatus("Please upload a video file first.", "error");
+    return;
   }
-  videoDuration.textContent = `Duration: ${formatDuration(duration)}`;
+
+  setLoading(true);
+  setStatus("Uploading and evaluating…");
+  renderPitchPreview(buildPreviewData());
+
+  try {
+    const result = await evaluateWithFile(selectedFile);
+
+    renderSummary(result.summary || {});
+    renderBars(quantScores,     result.dashboard?.quantitative_scores || [], 10, "score");
+    renderBars(modalityWeights, result.dashboard?.modality_weights    || [],  1, "modality");
+    renderRisks(result.dashboard?.risk_distribution || []);
+    renderGuidance(result.summary || {});
+    renderChunks(result.chunk_reports || []);
+    rawJson.textContent = JSON.stringify(result, null, 2);
+
+    const overall = Number(result.summary?.overall_score || 0);
+    latestRating  = { score: overall.toFixed(2), band: result.summary?.investment_band || "-" };
+    showRatingPanel(latestRating.score, latestRating.band);
+
+    evaluationPlaceholder.classList.add("hidden");
+    evaluationResults.classList.remove("hidden");
+    setStatus("Evaluation complete.");
+    evaluationResults.scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (err) {
+    showError(err.message || "Something went wrong.");
+    setStatus("Evaluation failed.", "error");
+  } finally {
+    setLoading(false);
+  }
 });
 
-pitchVideo.addEventListener("ended", () => {
-  handleVideoEnded();
+// ── Clear ─────────────────────────────────────────────────────────────────────
+clearBtn.addEventListener("click", () => globalThis.location.reload());
+
+// ── Purge data ────────────────────────────────────────────────────────────────
+purgeBtn.addEventListener("click", async () => {
+  if (!confirm("Delete all uploaded videos and server-side data? This cannot be undone.")) return;
+  purgeBtn.disabled = true;
+  try {
+    const res  = await fetch("/purge", { method: "POST" });
+    const data = await res.json();
+    if (res.ok) {
+      setStatus(`Purged ${data.deleted_files} file(s) (${formatBytes(data.freed_bytes)}).`);
+    } else {
+      setStatus(`Purge failed: ${data.detail || "unknown error"}`, "error");
+    }
+  } catch {
+    setStatus("Purge request failed.", "error");
+  } finally {
+    purgeBtn.disabled = false;
+  }
 });
 
-// Load videos on page start
+// ── Scoring mode badge ────────────────────────────────────────────────────────
+function normalizeScoringMode(value) {
+  const m = String(value || "").trim().toLowerCase();
+  if (m.includes("heuristic")) return "heuristic";
+  if (m.includes("neural"))    return "neural-network";
+  return m || "unknown";
+}
+
+function updateScoringModeBadge(mode) {
+  currentScoringMode = normalizeScoringMode(mode);
+  modeBadge.textContent = `Scoring Mode: ${currentScoringMode}`;
+  modeBadge.classList.toggle("is-heuristic", currentScoringMode === "heuristic");
+  modeBadge.classList.toggle("is-neural",    currentScoringMode === "neural-network");
+}
+
+async function loadScoringMode() {
+  try {
+    const res  = await fetch("/scoring-mode");
+    const data = await res.json();
+    updateScoringModeBadge(data.scoring_mode);
+  } catch {
+    updateScoringModeBadge("unknown");
+  }
+}
+
+// ── Live preview on field input ───────────────────────────────────────────────
+Object.values(fields).filter(Boolean).forEach((f) => {
+  f.addEventListener("input", () => renderPitchPreview(buildPreviewData()));
+});
+
+// ── Init ──────────────────────────────────────────────────────────────────────
 await loadScoringMode();
-await loadVideoList();
-
-renderPitchPreview(toPayload());
+renderPitchPreview(buildPreviewData());
