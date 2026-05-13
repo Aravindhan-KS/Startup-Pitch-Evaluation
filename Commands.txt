@@ -6,4 +6,11 @@ python.exe prepare_videos_with_whisper.py --input-dir backend/Input-Output/Testi
 
 python scripts/train.py --config models/config/training_gpu.yaml
 
-Set-Location backend; ..\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+
+
+Set-Location backend; ..\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 
+
+.\.venv\Scripts\python.exe app/edge/camera_runner.py --file "C:\Users\aravi\OneDrive\Documents\GitHub\Startup-Pitch-Evaluation\backend\outputs\batch_input\Manesh Startup Pitch.mp4"
+.\.venv\Scripts\python.exe app/edge/camera_runner.py --file  "C:\Users\aravi\OneDrive\Documents\GitHub\Startup-Pitch-Evaluation\backend\outputs\batch_input\Ideathon_yt_withBG.mov"
+
+streamlit run streamlit_app.py
