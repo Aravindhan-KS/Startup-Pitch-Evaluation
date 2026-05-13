@@ -72,7 +72,7 @@ def init_storage_bucket():
         return None
 
 
-def upload_pitch_result(result: dict) -> bool:
+def upload_pitch_result(result: dict, video_title: str | None = None) -> bool:
     """Upload pitch evaluation result to Firebase Firestore.
     
     Args:
@@ -94,8 +94,12 @@ def upload_pitch_result(result: dict) -> bool:
 
         payload = {
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "result": result
+            "result": result,
         }
+
+        # Include video title/filename as top-level metadata if provided
+        if video_title:
+            payload["video_title"] = str(video_title)
 
         doc_ref = db.collection("pitch_evaluations").add(payload)
         logger.info(f"Pitch result uploaded to Firebase: {doc_ref}")

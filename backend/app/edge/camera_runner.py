@@ -91,7 +91,12 @@ def upload_and_evaluate_file(video_path: Path) -> bool:
             response = requests.post(BACKEND_URL, files=files, data=data, timeout=900)
             response.raise_for_status()
             result = response.json()
-            upload_pitch_result(result)
+            # Pass the original filename/title so the dashboard can display it
+            try:
+                upload_pitch_result(result, video_title=staged_path.name)
+            except TypeError:
+                # Fallback for older signatures
+                upload_pitch_result(result)
             logger.info("Evaluation completed successfully")
             logger.info("Overall score: %s", result.get("summary", {}).get("overall_score"))
             logger.info("Investment band: %s", result.get("summary", {}).get("investment_band"))

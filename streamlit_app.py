@@ -65,6 +65,7 @@ def load_results(db, limit: int = 50) -> pd.DataFrame:
 
             rows.append({
                 "timestamp": data.get("timestamp", "N/A"),
+                "video_title": data.get("video_title") or result.get("request_id", "N/A"),
                 "overall_score": summary.get("overall_score", 0),
                 "confidence_score": summary.get("confidence_score", 0),
                 "investment_band": summary.get("investment_band", "Unknown"),
@@ -154,20 +155,6 @@ def main():
         max_value=100,
         value=20
     )
-    
-    st.sidebar.markdown("---")
-    st.sidebar.info(
-        """
-        **How it works:**
-        1. Local edge device captures videos
-        2. Backend evaluates using multimodal pipeline
-        3. Results uploaded to Firebase
-        4. Dashboard displays in real-time
-        
-        **Status:** Connected to Firebase
-        """
-    )
-
     # Initialize Firebase
     db = init_firebase()
 
@@ -250,6 +237,9 @@ def main():
                         st.write("**Weaknesses:**", latest["weaknesses"])
                         st.write("**Suggestions:**", latest["suggestions"])
 
+                    # Video title
+                    st.markdown(f"**Video:** {latest.get('video_title', 'Unknown')}")
+
                     # Quantitative Scores Chart
                     st.subheader("📈 Quantitative Scores")
                     scores_dict = create_score_chart(latest["quantitative_scores"])
@@ -286,10 +276,10 @@ def main():
                     # Recent Evaluations Table
                     st.subheader("📊 Recent Evaluations")
                     
-                    display_cols = ["timestamp", "overall_score", "confidence_score", 
+                    display_cols = ["timestamp", "video_title", "overall_score", "confidence_score", 
                                    "investment_band", "language_detected"]
                     table_df = df[display_cols].copy()
-                    table_df.columns = ["Timestamp", "Score", "Confidence", 
+                    table_df.columns = ["Timestamp", "Video", "Score", "Confidence", 
                                        "Band", "Language"]
                     
                     st.dataframe(

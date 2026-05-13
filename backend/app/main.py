@@ -156,10 +156,10 @@ async def evaluate_pitch(request: Request):
 
         result = inference_service.evaluate_payload(payload)
         
-        # Upload result to cloud database
+        # Upload result to cloud database (include video title)
         try:
             result_dict = result.model_dump() if hasattr(result, "model_dump") else result
-            upload_pitch_result(result_dict)
+            upload_pitch_result(result_dict, video_title=resolved_title)
         except Exception as e:
             logger.warning(f"Cloud upload failed for request {result_dict.get('request_id', 'unknown')}: {e}")
         
@@ -174,10 +174,10 @@ async def evaluate_pitch(request: Request):
     payload = PitchInput(**body)
     result = inference_service.evaluate_payload(payload)
     
-    # Upload result to cloud database
+    # Upload result to cloud database (include video title if available)
     try:
         result_dict = result.model_dump() if hasattr(result, "model_dump") else result
-        upload_pitch_result(result_dict)
+        upload_pitch_result(result_dict, video_title=payload.title if getattr(payload, 'title', None) else None)
     except Exception as e:
         logger.warning(f"Cloud upload failed for request {result_dict.get('request_id', 'unknown')}: {e}")
     
@@ -242,10 +242,10 @@ async def evaluate_pitch_upload(
 
     result = inference_service.evaluate_payload(payload)
     
-    # Upload result to cloud database
+    # Upload result to cloud database (include video title)
     try:
         result_dict = result.model_dump() if hasattr(result, "model_dump") else result
-        upload_pitch_result(result_dict)
+        upload_pitch_result(result_dict, video_title=resolved_title)
     except Exception as e:
         logger.warning(f"Cloud upload failed for request {result_dict.get('request_id', 'unknown')}: {e}")
     
