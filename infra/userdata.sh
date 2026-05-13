@@ -13,8 +13,8 @@ usermod -aG docker ec2-user
 # ── Docker Compose v2 plugin ─────────────────────────────────────────────────────
 mkdir -p /usr/local/lib/docker/cli-plugins
 curl -fsSL \
-  "https://github.com/docker/compose/releases/download/v2.27.1/docker-compose-linux-x86_64" \
-  -o /usr/local/lib/docker/cli-plugins/docker-compose
+	"https://github.com/docker/compose/releases/download/v2.27.1/docker-compose-linux-x86_64" \
+	-o /usr/local/lib/docker/cli-plugins/docker-compose
 chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
 
 # ── ECR credential helper for ec2-user ──────────────────────────────────────────
@@ -24,11 +24,11 @@ ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text 2>/dev/nu
 mkdir -p /home/ec2-user/.docker
 
 if [ -n "$ACCOUNT_ID" ]; then
-  printf '{"credHelpers":{"%s.dkr.ecr.${aws_region}.amazonaws.com":"ecr-login"}}\n' \
-    "$ACCOUNT_ID" > /home/ec2-user/.docker/config.json
+	printf '{"credHelpers":{"%s.dkr.ecr.${aws_region}.amazonaws.com":"ecr-login"}}\n' \
+		"$ACCOUNT_ID" >/home/ec2-user/.docker/config.json
 else
-  printf '{"credHelpers":{"public.ecr.aws":"ecr-login"}}\n' \
-    > /home/ec2-user/.docker/config.json
+	printf '{"credHelpers":{"public.ecr.aws":"ecr-login"}}\n' \
+		>/home/ec2-user/.docker/config.json
 fi
 
 chown -R ec2-user:ec2-user /home/ec2-user/.docker

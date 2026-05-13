@@ -52,14 +52,18 @@ def health() -> dict:
         "status": "ok",
         "service": settings.app_name,
         "version": settings.app_version,
-        "scoring_mode": "heuristic" if settings.use_heuristic_pipeline else "neural-network",
+        "scoring_mode": "heuristic"
+        if settings.use_heuristic_pipeline
+        else "neural-network",
     }
 
 
 @app.get("/scoring-mode")
 def scoring_mode() -> dict:
     return {
-        "scoring_mode": "heuristic" if settings.use_heuristic_pipeline else "neural-network"
+        "scoring_mode": "heuristic"
+        if settings.use_heuristic_pipeline
+        else "neural-network"
     }
 
 
@@ -105,7 +109,9 @@ async def evaluate_pitch(request: Request):
         form = await request.form()
         video = form.get("video")
         if not video or not getattr(video, "filename", None):
-            raise HTTPException(status_code=400, detail="Bad Request: video file is required")
+            raise HTTPException(
+                status_code=400, detail="Bad Request: video file is required"
+            )
 
         title = form.get("title", "")
         transcript = form.get("transcript", "")
@@ -124,7 +130,9 @@ async def evaluate_pitch(request: Request):
             shutil.copyfileobj(video.file, buffer)
 
         resolved_title = title.strip() or Path(video.filename or safe_name).stem
-        slide_points = [line.strip() for line in slide_text.splitlines() if line.strip()]
+        slide_points = [
+            line.strip() for line in slide_text.splitlines() if line.strip()
+        ]
         duration_sec = _detect_duration_sec(saved_path)
 
         payload = PitchInput(
@@ -157,10 +165,14 @@ async def evaluate_pitch(request: Request):
 
         # Upload result to cloud database (include video title)
         try:
-            result_dict = result.model_dump() if hasattr(result, "model_dump") else result
+            result_dict = (
+                result.model_dump() if hasattr(result, "model_dump") else result
+            )
             upload_pitch_result(result_dict, video_title=resolved_title)
         except Exception as e:
-            logger.warning(f"Cloud upload failed for request {result_dict.get('request_id', 'unknown')}: {e}")
+            logger.warning(
+                f"Cloud upload failed for request {result_dict.get('request_id', 'unknown')}: {e}"
+            )
 
         return result
 
@@ -168,7 +180,9 @@ async def evaluate_pitch(request: Request):
     try:
         body = await request.json()
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Invalid JSON body: {exc}") from exc
+        raise HTTPException(
+            status_code=400, detail=f"Invalid JSON body: {exc}"
+        ) from exc
 
     payload = PitchInput(**body)
     result = inference_service.evaluate_payload(payload)
@@ -176,9 +190,14 @@ async def evaluate_pitch(request: Request):
     # Upload result to cloud database (include video title if available)
     try:
         result_dict = result.model_dump() if hasattr(result, "model_dump") else result
-        upload_pitch_result(result_dict, video_title=payload.title if getattr(payload, 'title', None) else None)
+        upload_pitch_result(
+            result_dict,
+            video_title=payload.title if getattr(payload, "title", None) else None,
+        )
     except Exception as e:
-        logger.warning(f"Cloud upload failed for request {result_dict.get('request_id', 'unknown')}: {e}")
+        logger.warning(
+            f"Cloud upload failed for request {result_dict.get('request_id', 'unknown')}: {e}"
+        )
 
     return result
 
@@ -242,7 +261,9 @@ async def evaluate_pitch_upload(
         result_dict = result.model_dump() if hasattr(result, "model_dump") else result
         upload_pitch_result(result_dict, video_title=resolved_title)
     except Exception as e:
-        logger.warning(f"Cloud upload failed for request {result_dict.get('request_id', 'unknown')}: {e}")
+        logger.warning(
+            f"Cloud upload failed for request {result_dict.get('request_id', 'unknown')}: {e}"
+        )
 
     return result
 
@@ -258,7 +279,11 @@ def evaluate_pitch_batch(payload: BatchEvaluationRequest) -> BatchEvaluationResp
         # Upload each batch result to cloud database
         try:
             for evaluation in result.evaluations:
-                eval_dict = evaluation.model_dump() if hasattr(evaluation, "model_dump") else evaluation
+                eval_dict = (
+                    evaluation.model_dump()
+                    if hasattr(evaluation, "model_dump")
+                    else evaluation
+                )
                 upload_pitch_result(eval_dict)
         except Exception as e:
             logger.warning(f"Cloud batch upload failed: {e}")
@@ -298,6 +323,5 @@ def get_video(video_name: str):
         raise HTTPException(status_code=400, detail="Invalid video format")
 
     return FileResponse(
-        video_path,
-        media_type=f"video/{video_path.suffix.lower().strip('.')}"
+        video_path, media_type=f"video/{video_path.suffix.lower().strip('.')}"
     )

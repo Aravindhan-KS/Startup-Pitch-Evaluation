@@ -91,7 +91,7 @@ resource "aws_ecr_lifecycle_policy" "nginx" {
 
 resource "aws_security_group" "app" {
   name_prefix = "${var.project_name}-"
-  description = "Startup Pitch Evaluation – allow web + SSH"
+  description = "Startup Pitch Evaluation - allow web + SSH"
 
   ingress {
     description = "SSH"
@@ -102,7 +102,7 @@ resource "aws_security_group" "app" {
   }
 
   ingress {
-    description = "HTTP (nginx → backend)"
+    description = "HTTP (nginx to backend)"
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
