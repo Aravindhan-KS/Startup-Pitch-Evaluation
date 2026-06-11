@@ -199,6 +199,7 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
+backend/Input-Output/
 **/audio_chunks/
 **/frames/
 **/edge_staging/
