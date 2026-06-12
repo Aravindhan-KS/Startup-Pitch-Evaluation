@@ -12,12 +12,10 @@ class VisualEncoder:
 
     def __init__(
         self,
-        embedding_dim: int = 24,
-        use_heuristic: bool = True,
+        embedding_dim: int = 256,
         backbone_name: str = "mobilenet_v3_small",
     ) -> None:
         self.embedding_dim = embedding_dim
-        self.use_heuristic = use_heuristic
         self.backbone_name = backbone_name.strip().lower()
 
         self._torch = None
@@ -29,8 +27,9 @@ class VisualEncoder:
         self._scoring_mlp = None
         self._device = "cpu"
 
-        if not self.use_heuristic:
-            self._initialize_neural_backend()
+        self._initialize_neural_backend()
+        if not self._neural_backend_ready():
+            raise RuntimeError(f"Failed to initialize neural visual encoder '{self.backbone_name}'")
 
     def _initialize_neural_backend(self) -> None:
         if self.backbone_name != "mobilenet_v3_small":
@@ -147,7 +146,7 @@ class VisualEncoder:
             "presenter_confidence": self._clamp_10(presenter_confidence),
         }
 
-    def _heuristic_infer(
+    def _neutral_fallback(
         self,
         slide_context: str,
         chunk_id: int,
@@ -162,50 +161,12 @@ class VisualEncoder:
         pose_ratio: float,
         gesture_energy: float,
     ) -> dict:
-        text = slide_context if slide_context else "no-slides"
-        density = min(len(text.split()), 120) / 120.0
-        stage_bonus = 0.8 if user_stage.lower() in {"seed", "series-a", "series a"} else 0.3
-
-        duration = max(1.0, end_sec - start_sec)
-        frame_coverage = min(2.0, frame_count / duration)
-        if extraction_status == "success":
-            extraction_bonus = 0.8
-        elif extraction_status == "pending":
-            extraction_bonus = 0.35
-        else:
-            extraction_bonus = 0.0
-
-        missing_visual_signal = extraction_status in {"missing-video", "backend-unavailable", "skipped"}
-        if missing_visual_signal:
-            delivery_clarity = self._clamp_10(5.1 + density * 1.5 + stage_bonus * 0.2)
-            presenter_confidence = self._clamp_10(5.0 + density * 1.0 + stage_bonus * 0.5)
-        else:
-            delivery_clarity = self._clamp_10(
-                3.8
-                + density * 2.8
-                + frame_coverage * 0.9
-                + motion_score * 0.6
-                + pose_ratio * 1.2
-                + gesture_energy * 0.7
-                + extraction_bonus
-            )
-            presenter_confidence = self._clamp_10(
-                4.0
-                + density * 1.6
-                + stage_bonus
-                + extraction_bonus
-                + face_ratio * 1.0
-                + eye_contact_score * 1.5
-                + pose_ratio * 1.0
-                + gesture_energy * 0.8
-            )
-
         return {
             "embedding": self._hash_to_vector(
-                f"visual::{chunk_id}::{text}::{user_stage}::frames={frame_count}::face={face_ratio:.3f}::eye={eye_contact_score:.3f}::pose={pose_ratio:.3f}::gesture={gesture_energy:.3f}::motion={motion_score:.3f}::status={extraction_status}"
+                f"visual::{chunk_id}::{slide_context}::{user_stage}::frames={frame_count}::start={start_sec:.2f}::end={end_sec:.2f}::status={extraction_status}::face={face_ratio:.3f}::eye={eye_contact_score:.3f}::pose={pose_ratio:.3f}::gesture={gesture_energy:.3f}::motion={motion_score:.3f}"
             ),
-            "delivery_clarity": delivery_clarity,
-            "presenter_confidence": presenter_confidence,
+            "delivery_clarity": 5.0,
+            "presenter_confidence": 5.0,
         }
 
     def _hash_to_vector(self, value: str) -> list[float]:
@@ -231,24 +192,8 @@ class VisualEncoder:
         pose_ratio = float(getattr(video_metadata, "pose_ratio", 0.0))
         gesture_energy = float(getattr(video_metadata, "gesture_energy", 0.0))
 
-        if self.use_heuristic:
-            return self._heuristic_infer(
-                slide_context=slide_context,
-                chunk_id=chunk_id,
-                user_stage=user_stage,
-                frame_count=frame_count,
-                start_sec=start_sec,
-                end_sec=end_sec,
-                extraction_status=extraction_status,
-                face_ratio=face_ratio,
-                motion_score=motion_score,
-                eye_contact_score=eye_contact_score,
-                pose_ratio=pose_ratio,
-                gesture_energy=gesture_energy,
-            )
-
         if extraction_status != "success" or not self._neural_backend_ready():
-            return self._heuristic_infer(
+            return self._neutral_fallback(
                 slide_context=slide_context,
                 chunk_id=chunk_id,
                 user_stage=user_stage,
@@ -266,7 +211,7 @@ class VisualEncoder:
         frame_dir = str(getattr(video_metadata, "frame_dir", ""))
         frame_tensors = self._load_frame_tensors(frame_dir)
         if not frame_tensors:
-            return self._heuristic_infer(
+            return self._neutral_fallback(
                 slide_context=slide_context,
                 chunk_id=chunk_id,
                 user_stage=user_stage,
@@ -285,8 +230,8 @@ class VisualEncoder:
             aux_features = self._extract_aux_features(video_metadata)
             return self._neural_infer(frame_tensors, aux_features)
         except Exception as exc:
-            logger.warning("Neural visual inference failed; falling back to heuristics: %s", exc)
-            return self._heuristic_infer(
+            logger.warning("Neural visual inference failed; using neutral fallback: %s", exc)
+            return self._neutral_fallback(
                 slide_context=slide_context,
                 chunk_id=chunk_id,
                 user_stage=user_stage,

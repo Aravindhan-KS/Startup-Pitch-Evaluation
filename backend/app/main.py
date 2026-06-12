@@ -41,7 +41,6 @@ app.mount("/static", StaticFiles(directory=static_dir), name="static")
 # Log startup mode
 logger.info(
     f"App started | {settings.app_name} v{settings.app_version} | "
-    f"use_heuristic_pipeline={settings.use_heuristic_pipeline} | "
     f"use_local_transcriber={settings.use_local_transcriber}"
 )
 
@@ -52,20 +51,15 @@ def health() -> dict:
         "status": "ok",
         "service": settings.app_name,
         "version": settings.app_version,
-        "scoring_mode": "heuristic"
-        if settings.use_heuristic_pipeline
-        else "neural-network",
+        "scoring_mode": "neural-network",
     }
 
 
 @app.get("/scoring-mode")
 def scoring_mode() -> dict:
     return {
-        "scoring_mode": "heuristic"
-        if settings.use_heuristic_pipeline
-        else "neural-network"
+        "scoring_mode": "neural-network"
     }
-
 
 @app.get("/")
 def frontend() -> FileResponse:

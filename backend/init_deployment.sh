@@ -12,7 +12,7 @@ mkdir -p outputs/uploads
 # Verify model files exist
 if [ ! -f models/checkpoints/phase6_gpu_nn_model.pt ]; then
     echo "⚠️  Warning: Model checkpoint not found at models/checkpoints/phase6_gpu_nn_model.pt"
-    echo "   The heuristic pipeline will still work, but neural network scoring will be disabled"
+    echo "   Neural network scoring requires this checkpoint to be available"
 fi
 
 # Create .env if it doesn't exist
@@ -22,7 +22,6 @@ if [ ! -f .env ]; then
 SPE_APP_NAME=Startup Pitch Evaluation API
 SPE_APP_VERSION=0.1.0
 SPE_CHUNK_WINDOW_SECONDS=5
-SPE_USE_HEURISTIC_PIPELINE=true
 SPE_USE_LOCAL_TRANSCRIBER=true
 SPE_ENABLE_VISUAL_EXTRACTION=true
 SPE_ENABLE_AUDIO_EXTRACTION=true

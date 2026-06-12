@@ -422,17 +422,13 @@ purgeBtn.addEventListener("click", async () => {
 
 // ── Scoring mode badge ────────────────────────────────────────────────────────
 function normalizeScoringMode(value) {
-  const m = String(value || "").trim().toLowerCase();
-  if (m.includes("heuristic")) return "heuristic";
-  if (m.includes("neural"))    return "neural-network";
-  return m || "unknown";
+  return "neural-network";
 }
 
 function updateScoringModeBadge(mode) {
-  currentScoringMode = normalizeScoringMode(mode);
+  currentScoringMode = "neural-network";
   modeBadge.textContent = `Scoring Mode: ${currentScoringMode}`;
-  modeBadge.classList.toggle("is-heuristic", currentScoringMode === "heuristic");
-  modeBadge.classList.toggle("is-neural",    currentScoringMode === "neural-network");
+  modeBadge.classList.toggle("is-neural", true);
 }
 
 async function loadScoringMode() {

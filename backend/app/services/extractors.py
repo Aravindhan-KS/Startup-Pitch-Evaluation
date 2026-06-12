@@ -6,10 +6,8 @@ from app.core.config import settings
 
 class TextFeatureExtractor:
     def __init__(self) -> None:
-        use_heuristic = settings.use_heuristic_pipeline
         self.model = TextEncoder(
-            embedding_dim=24 if use_heuristic else 384,
-            use_heuristic=use_heuristic,
+            embedding_dim=384,
             model_name=settings.nn_text_encoder,
         )
 
@@ -19,10 +17,8 @@ class TextFeatureExtractor:
 
 class VisualFeatureExtractor:
     def __init__(self) -> None:
-        use_heuristic = settings.use_heuristic_pipeline
         self.model = VisualEncoder(
-            embedding_dim=24 if use_heuristic else 256,
-            use_heuristic=use_heuristic,
+            embedding_dim=256,
             backbone_name=settings.nn_visual_backbone,
         )
 
@@ -32,10 +28,8 @@ class VisualFeatureExtractor:
 
 class AudioFeatureExtractor:
     def __init__(self) -> None:
-        use_heuristic = settings.use_heuristic_pipeline
         self.model = AudioEncoder(
-            embedding_dim=24 if use_heuristic else 128,
-            use_heuristic=use_heuristic,
+            embedding_dim=128,
             feature_type=settings.nn_audio_features,
         )
 

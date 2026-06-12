@@ -255,11 +255,10 @@ Environment variables use the `SPE_` prefix and are loaded from:
 - repository root `.env`
 - `backend/.env`
 
-Core switches:
+Core settings:
 
 ```text
 SPE_CHUNK_WINDOW_SECONDS=5
-SPE_USE_HEURISTIC_PIPELINE=true
 SPE_USE_LOCAL_TRANSCRIBER=true
 SPE_ENABLE_VISUAL_EXTRACTION=true
 SPE_ENABLE_AUDIO_EXTRACTION=true
@@ -281,19 +280,12 @@ SPE_OPENAI_TRANSCRIBER_MODEL=whisper-1
 Neural path controls:
 
 ```text
-SPE_USE_HEURISTIC_PIPELINE=false
 SPE_NN_CHECKPOINT_PATH=models/checkpoints/nn_model.pt
 SPE_NN_TEXT_ENCODER=all-MiniLM-L6-v2
 SPE_NN_VISUAL_BACKBONE=mobilenet_v3_small
 SPE_NN_AUDIO_FEATURES=mfcc
 SPE_NN_DEVICE=auto
 ```
-
-### Heuristic vs neural mode
-
-- Keep `SPE_USE_HEURISTIC_PIPELINE=true` for deterministic heuristic processing.
-- Set `SPE_USE_HEURISTIC_PIPELINE=false` to activate the neural extraction/fusion/scoring path.
-- In neural mode, set `SPE_NN_CHECKPOINT_PATH` to a valid checkpoint.
 
 ## Dataset format (Option A)
 
@@ -356,7 +348,6 @@ Use this when you want to run the FastAPI service locally for development, testi
 **Terminal 1: start the backend**
 
 ```powershell
-$env:USE_HEURISTIC_PIPELINE = 'false'  # or 'true' for deterministic heuristic mode
 .\run_backend.ps1
 ```
 

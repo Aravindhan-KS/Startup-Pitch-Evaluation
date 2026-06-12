@@ -3,6 +3,7 @@ import logging
 import re
 
 import numpy as np
+from langdetect import DetectorFactory
 from app.core.config import settings
 
 
@@ -14,13 +15,11 @@ class TextEncoder:
 
     def __init__(
         self,
-        embedding_dim: int = 24,
-        use_heuristic: bool = True,
+        embedding_dim: int = 384,
         model_name: str = "all-MiniLM-L6-v2",
         hidden_dim: int = 128,
     ) -> None:
         self.embedding_dim = embedding_dim
-        self.use_heuristic = use_heuristic
         self.model_name = model_name
         self.hidden_dim = hidden_dim
         self._nn_model = None
@@ -31,8 +30,9 @@ class TextEncoder:
         self._w2: np.ndarray | None = None
         self._b2: np.ndarray | None = None
 
-        if not self.use_heuristic:
-            self._initialize_neural_backend()
+        self._initialize_neural_backend()
+        if self._nn_model is None:
+            raise RuntimeError(f"Failed to initialize neural text encoder '{self.model_name}'")
 
     def _initialize_neural_backend(self) -> None:
         try:
@@ -47,11 +47,7 @@ class TextEncoder:
         try:
             from sentence_transformers import SentenceTransformer  # type: ignore
         except Exception as exc:
-            logger.warning(
-                "Neural text encoder disabled (sentence-transformers unavailable): %s",
-                exc,
-            )
-            return
+            raise RuntimeError("Neural text encoder requires sentence-transformers") from exc
 
         try:
             self._nn_model = SentenceTransformer(self.model_name, device=self._nn_device)
@@ -59,11 +55,7 @@ class TextEncoder:
             self.embedding_dim = self._nn_input_dim
             self._initialize_mlp_weights()
         except Exception as exc:
-            logger.warning(
-                "Neural text encoder disabled (model load failed: %s): %s",
-                self.model_name,
-                exc,
-            )
+            logger.warning("Neural text encoder model load failed: %s", exc)
             self._nn_model = None
 
     def _initialize_mlp_weights(self) -> None:
@@ -170,6 +162,7 @@ class TextEncoder:
         try:
             from langdetect import detect_langs  # type: ignore
 
+            DetectorFactory.seed = 0
             predictions = detect_langs(text)
             probs = {item.lang: item.prob for item in predictions}
             ta_prob = probs.get("ta", 0.0)
@@ -201,38 +194,11 @@ class TextEncoder:
     def _clamp_10(value: float) -> float:
         return max(0.0, min(10.0, value))
 
-    def _heuristic_scores(self, normalized_text: str, language: str) -> dict[str, float]:
-        words = normalized_text.split()
-        unique_ratio = len(set(words)) / max(1, len(words))
-        lowered = normalized_text.lower()
-
-        problem_signal = 2.0 if "problem" in lowered else 0.0
-        market_signal = 2.0 if "market" in lowered else 0.0
-        traction_signal = 2.0 if any(k in lowered for k in ["pilot", "growth", "revenue"]) else 0.0
-        business_model_signal = 2.0 if any(k in lowered for k in ["price", "subscription", "saas", "margin"]) else 0.0
-        team_signal = 2.0 if any(k in lowered for k in ["team", "founder", "experience"]) else 0.0
-        language_bonus = 1.0 if language == "ta-en" else 0.4
-
-        return {
-            "problem_clarity": self._clamp_10(4.0 + problem_signal + unique_ratio * 1.5),
-            "market_opportunity": self._clamp_10(4.0 + market_signal + unique_ratio * 1.3),
-            "solution_uniqueness": self._clamp_10(4.5 + unique_ratio * 3.0),
-            "traction_evidence": self._clamp_10(3.5 + traction_signal + min(len(words), 40) * 0.08),
-            "business_model_strength": self._clamp_10(3.5 + business_model_signal + min(len(words), 30) * 0.07),
-            "team_readiness": self._clamp_10(3.0 + team_signal + language_bonus),
-        }
-
     def infer(self, chunk_text: str, language_hint: str, slide_context: str) -> dict:
         normalized_text = self._normalize(chunk_text)
         language = self._detect_language(normalized_text, language_hint)
-        heuristic_targets = self._heuristic_scores(normalized_text, language)
-
-        if self.use_heuristic or self._nn_model is None:
-            output_scores = heuristic_targets
-            embedding = self._hash_to_vector(f"text::{normalized_text}::{slide_context}")
-        else:
-            embedding = self._semantic_embedding(normalized_text)
-            output_scores = self._mlp_predict(embedding)
+        embedding = self._semantic_embedding(normalized_text)
+        output_scores = self._mlp_predict(embedding)
 
         return {
             "embedding": embedding,
@@ -243,5 +209,4 @@ class TextEncoder:
             "traction_evidence": output_scores["traction_evidence"],
             "business_model_strength": output_scores["business_model_strength"],
             "team_readiness": output_scores["team_readiness"],
-            "heuristic_targets": heuristic_targets,
         }

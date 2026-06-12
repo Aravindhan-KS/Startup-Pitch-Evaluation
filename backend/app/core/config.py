@@ -11,8 +11,6 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     chunk_window_seconds: int = 5
 
-    # Phase 0: Migration control flags
-    use_heuristic_pipeline: bool = True
     use_local_transcriber: bool = True
     enable_visual_extraction: bool = True
     enable_audio_extraction: bool = True

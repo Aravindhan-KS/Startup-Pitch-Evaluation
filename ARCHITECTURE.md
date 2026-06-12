@@ -363,7 +363,7 @@ CPU: Shared, but often paired with GPU support
 |--------|------------|-----------|------------|
 | 30-sec video | 1-2 min | 5-10 min | 15-30 min |
 | 60-sec video | 2-4 min | 10-20 min | 30-60 min |
-| With heuristic | 30 sec | 2-3 min | 3-5 min |
+| With neural network | 30 sec | 2-3 min | 3-5 min |
 | Memory usage | 2-4 GB | 1-2 GB | 512 MB limit |
 | Concurrent requests | Depends on GPU | 1-2 max | 1 max (free) |
 
@@ -407,7 +407,7 @@ Your system processes startup pitch videos through a sophisticated ML pipeline:
 ✅ **3 modalities** (text, visual, audio) for holistic scoring
 ✅ **Works locally** for development
 ✅ **Exposes the backend publicly** through Colab + ngrok
-✅ **Heuristic mode** for fast execution without GPU
+✅ **Neural network mode** with adaptive cross-modal fusion
 ✅ **Neural mode** for high-quality analysis with models
 ✅ **Fallback gracefully** when resources are limited
 

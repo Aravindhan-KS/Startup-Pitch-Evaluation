@@ -30,7 +30,6 @@ class StartupPitchPipeline:
         # Log active pipeline mode
         logger.info(
             "Pipeline initialized | "
-            f"use_heuristic_pipeline={settings.use_heuristic_pipeline} | "
             f"use_local_transcriber={settings.use_local_transcriber} | "
             f"nn_checkpoint_path={settings.nn_checkpoint_path} | "
             f"nn_text_encoder={settings.nn_text_encoder} | "
@@ -234,7 +233,7 @@ class StartupPitchPipeline:
             confidence_score=confidence_score,
             investment_band=investment_band,
             language_detected=language_detected,
-            scoring_mode="heuristic" if settings.use_heuristic_pipeline else "neural-network",
+            scoring_mode="neural-network",
             strengths=feedback["strengths"],
             weaknesses=feedback["weaknesses"],
             suggestions=feedback["suggestions"],

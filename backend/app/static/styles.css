@@ -129,12 +129,6 @@ h1 {
   text-transform: capitalize;
 }
 
-.mode-badge.is-heuristic {
-  border-color: #e2c8a5;
-  background: #fff5e6;
-  color: #754521;
-}
-
 .mode-badge.is-neural {
   border-color: #b5d9c2;
   background: #eaf9ef;

@@ -123,7 +123,7 @@ All three branches run **in parallel** via a thread pool for every chunk (`backe
   | Traction Evidence | Proof of early adoption or validation |
   | Business Model Strength | Revenue logic and sustainability |
   | Team Readiness | Founder background and capability signals |
-- **Heuristic mode:** deterministic hashed embeddings + rule-based scoring.
+- **Neural network:** learned embeddings from SentenceTransformer (384-dim) + MLP scoring layers.
 - **Neural mode:** `sentence-transformers` embedding + lightweight MLP head.
 
 ### 6b — Visual Feature Extraction (`backend/models/visual_encoder.py`)
@@ -134,7 +134,7 @@ All three branches run **in parallel** via a thread pool for every chunk (`backe
   |---|---|
   | Delivery Clarity | Slide readability, visual structure |
   | Presenter Confidence | Eye contact, stable posture, minimal fidgeting |
-- **Heuristic mode:** rule-based scoring from raw visual metadata and slide stage context.
+- **Neural network:** frame classification CNNs (MobileNetV3) with learned metrics.
 - **Neural mode:** MobileNetV3-small feature backbone → projection layer → scoring MLP.
 
 ### 6c — Audio Feature Extraction (`backend/models/audio_encoder.py`)
@@ -145,7 +145,7 @@ All three branches run **in parallel** via a thread pool for every chunk (`backe
   |---|---|
   | Voice Pace | Speaking rate relative to expected WPM |
   | Voice Prosody | Variation in pitch and energy (expressiveness) |
-- **Heuristic mode:** text-pace calculation + waveform quality proxies.
+- **Neural network:** MFCC spectrogram → CNN → learned metrics (voice pace, prosody).
 - **Neural mode:** MFCC spectrogram → CNN → scoring MLP.
 
 ---
@@ -158,7 +158,7 @@ All three branches run **in parallel** via a thread pool for every chunk (`backe
 
 - Combines the three embeddings into a single **fused multimodal vector**.
 - Computes **attention weights** for each modality (`text_weight`, `visual_weight`, `audio_weight`) so the final result is explainable.
-- **Heuristic mode:** weights each modality by its embedding energy (magnitude).
+- **Neural network:** energy-based attention learned from checkpoint, with fixed fallback (60/20/20 text/visual/audio).
 - **Neural mode:** learned cross-modal attention that adapts weights based on content.
 
 **Why it matters:** Produces one unified per-chunk representation while preserving which modalities drove the score.
@@ -177,7 +177,7 @@ All three branches run **in parallel** via a thread pool for every chunk (`backe
 - Computes per-chunk:
   - `aggregate_score` — weighted combination of all 10 metrics.
   - `confidence_score` — how reliable the scoring is given available data.
-- **Heuristic mode:** explicit weighted formula over text/AV/fusion signals.
+- **Neural network:** learned multihead attention combining text/AV signals via projection + scoring layers.
 - **Neural mode:** learned scoring network loaded from a `.pt` checkpoint.
 
 ---
@@ -231,7 +231,7 @@ All three branches run **in parallel** via a thread pool for every chunk (`backe
   | `confidence_score` | Pipeline-level reliability estimate |
   | `investment_band` | `high-potential`, `watchlist`, or `early-risk` |
   | `language_detected` | Dominant language (`en`, `ta`, `ta-en`) |
-  | `processing_option` | `heuristic` or `neural` |
+  | `processing_option` | `neural-network` (exclusive) |
   | `processing_notes` | Any warnings or fallback messages |
 
 - Returns a complete `EvaluationResponse` with:
@@ -287,7 +287,7 @@ Client payload
 | Variable | Default | Effect |
 |---|---|---|
 | `SPE_CHUNK_WINDOW_SECONDS` | `5` | Duration of each timeline chunk |
-| `SPE_USE_HEURISTIC_PIPELINE` | `true` | `true` = rule-based path; `false` = neural path |
+| `SPE_NN_DEVICE` | `cpu`, `cuda`, or `auto` | Auto-detects GPU availability; required for neural inference |
 | `SPE_TRANSCRIBER_BACKEND` | `auto` | `faster-whisper`, `openai`, or `auto` |
 | `SPE_ENABLE_VISUAL_EXTRACTION` | `true` | Enable/disable frame extraction |
 | `SPE_ENABLE_AUDIO_EXTRACTION` | `true` | Enable/disable audio chunk extraction |

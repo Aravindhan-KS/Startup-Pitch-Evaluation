@@ -15,13 +15,11 @@ class AudioEncoder:
 
     def __init__(
         self,
-        embedding_dim: int = 24,
-        use_heuristic: bool = True,
+        embedding_dim: int = 128,
         sample_rate: int = 16000,
         feature_type: str = "mfcc",
     ) -> None:
         self.embedding_dim = embedding_dim
-        self.use_heuristic = use_heuristic
         self.sample_rate = sample_rate
         self.feature_type = feature_type.strip().lower()
 
@@ -33,8 +31,9 @@ class AudioEncoder:
         self._device = "cpu"
         self._warned_torchcodec = False
 
-        if not self.use_heuristic:
-            self._initialize_neural_backend()
+        self._initialize_neural_backend()
+        if not self._neural_backend_ready():
+            raise RuntimeError(f"Failed to initialize neural audio encoder '{self.feature_type}'")
 
     def _initialize_neural_backend(self) -> None:
         if self.feature_type != "mfcc":
@@ -203,7 +202,7 @@ class AudioEncoder:
             "prosody": self._clamp_10(prosody),
         }
 
-    def _heuristic_infer(
+    def _neutral_fallback(
         self,
         chunk_text: str,
         duration_sec: float,
@@ -215,33 +214,12 @@ class AudioEncoder:
         pitch_variation: float,
         energy_variation: float,
     ) -> dict:
-        words = chunk_text.split()
-        punctuation_count = sum(1 for c in chunk_text if c in ",;:!?")
-        words_per_second = len(words) / max(1.0, duration_sec)
-        missing_audio_signal = extraction_status in {"missing-video", "backend-unavailable", "skipped"}
-
-        if missing_audio_signal:
-            # Keep ratings neutral when runtime dependencies/media are unavailable.
-            pace = max(5.2, 6.2 - abs(2.4 - words_per_second) * 1.3)
-            prosody = 5.8 + min(punctuation_count, 8) * 0.2
-        else:
-            pace = (10.0 - abs(2.4 - words_per_second) * 3.0) * (0.55 + speech_density * 0.45)
-            prosody = (
-                4.0
-                + min(punctuation_count, 8) * 0.25
-                + quality_score * 1.8
-                + pitch_variation * 2.2
-                + energy_variation * 1.6
-                + speech_density * 1.2
-                - (silence_ratio * 1.8 + clipping_ratio * 2.2)
-            )
-
         return {
             "embedding": self._hash_to_vector(
-                f"audio::{chunk_text}::dur={duration_sec:.2f}::sil={silence_ratio:.2f}::clip={clipping_ratio:.2f}::sd={speech_density:.2f}::pv={pitch_variation:.2f}::ev={energy_variation:.2f}"
+                f"audio::{chunk_text}::dur={duration_sec:.2f}::status={extraction_status}::sil={silence_ratio:.2f}::clip={clipping_ratio:.2f}::q={quality_score:.2f}::sd={speech_density:.2f}::pv={pitch_variation:.2f}::ev={energy_variation:.2f}"
             ),
-            "voice_pace": self._clamp_10(pace),
-            "prosody": self._clamp_10(prosody),
+            "voice_pace": 5.0,
+            "prosody": 5.0,
         }
 
     def _hash_to_vector(self, value: str) -> list[float]:
@@ -266,21 +244,8 @@ class AudioEncoder:
         pitch_variation = float(getattr(audio_metadata, "pitch_variation", 0.0))
         energy_variation = float(getattr(audio_metadata, "energy_variation", 0.0))
 
-        if self.use_heuristic:
-            return self._heuristic_infer(
-                chunk_text=chunk_text,
-                duration_sec=duration_sec,
-                extraction_status=extraction_status,
-                silence_ratio=silence_ratio,
-                clipping_ratio=clipping_ratio,
-                quality_score=quality_score,
-                speech_density=speech_density,
-                pitch_variation=pitch_variation,
-                energy_variation=energy_variation,
-            )
-
         if extraction_status != "success":
-            return self._heuristic_infer(
+            return self._neutral_fallback(
                 chunk_text=chunk_text,
                 duration_sec=duration_sec,
                 extraction_status=extraction_status,
@@ -294,7 +259,7 @@ class AudioEncoder:
 
         waveform = self._load_waveform(audio_metadata)
         if waveform is None:
-            return self._heuristic_infer(
+            return self._neutral_fallback(
                 chunk_text=chunk_text,
                 duration_sec=duration_sec,
                 extraction_status=extraction_status,
@@ -309,8 +274,8 @@ class AudioEncoder:
         try:
             return self._neural_infer(waveform)
         except Exception as exc:
-            logger.warning("Neural audio inference failed; falling back to heuristics: %s", exc)
-            return self._heuristic_infer(
+            logger.warning("Neural audio inference failed; using neutral fallback: %s", exc)
+            return self._neutral_fallback(
                 chunk_text=chunk_text,
                 duration_sec=duration_sec,
                 extraction_status=extraction_status,
