@@ -201,7 +201,5 @@ cython_debug/
 
 **/Input-Output/
 backend/Input-Output/
-**/audio_chunks/
-**/frames/
-**/edge_staging/
+backend/outputs/
 backend/.env
