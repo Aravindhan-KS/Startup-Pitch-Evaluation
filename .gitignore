@@ -202,4 +202,5 @@ cython_debug/
 **/Input-Output/
 backend/Input-Output/
 backend/outputs/
+**/edge_staging/
 backend/.env
